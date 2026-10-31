@@ -3,16 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { PoolClient } from "pg";
-import { z } from "zod";
 import { pool } from "@/db";
 import { platformAuth } from "@/lib/platform-auth";
-
-const passwordInput = z.object({
-  currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(12).max(128),
-  confirmation: z.string().min(1).max(128),
-}).refine((value) => value.newPassword === value.confirmation, { path: ["confirmation"] })
-  .refine((value) => value.currentPassword !== value.newPassword, { path: ["newPassword"] });
+import { parsePlatformPasswordInput } from "@/modules/identity/platform-password";
 
 function raw(form: FormData, key: string): string {
   const value = form.get(key);
@@ -43,7 +36,7 @@ function logPasswordChangeFailure(phase: string, error: unknown): void {
 
 export async function changePlatformPasswordAction(form: FormData): Promise<void> {
   const path = "/platform/security/change-password";
-  const parsed = passwordInput.extend({ newPassword: z.string().min(14).max(128) }).safeParse({
+  const parsed = parsePlatformPasswordInput({
     currentPassword: raw(form, "currentPassword"),
     newPassword: raw(form, "newPassword"),
     confirmation: raw(form, "confirmation"),
