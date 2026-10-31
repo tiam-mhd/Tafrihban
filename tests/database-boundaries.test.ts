@@ -12,6 +12,21 @@ dbTest("branch scope rejects cross-tenant and sibling-branch requests; composite
   const client = await database.connect();
   try {
     await client.query("BEGIN");
+    const authIdDefaults = await client.query<{ table_name: string; column_default: string | null }>(
+      `SELECT table_name, column_default
+         FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = ANY($1::text[])
+          AND column_name = 'id'`,
+      [[
+        "users", "user_sessions", "user_accounts", "user_verifications",
+        "platform_admins", "platform_admin_sessions", "platform_admin_accounts",
+        "platform_admin_verifications", "platform_admin_two_factors",
+      ]],
+    );
+    assert.equal(authIdDefaults.rowCount, 9);
+    assert.ok(authIdDefaults.rows.every((row) => row.column_default?.includes("gen_random_uuid")));
+
     const orgA = randomUUID();
     const orgB = randomUUID();
     const branchA = randomUUID();

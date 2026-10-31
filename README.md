@@ -19,6 +19,7 @@
    npm.cmd run db:migrate
    npm.cmd run platform:bootstrap
    ```
+   این فرمان migrationهای جدید را هم روی دیتابیس موجود اعمال می‌کند. اگر bootstrap قبلاً به‌دلیل نبود default برای شناسهٔ مدیر پلتفرم شکست خورده، پس از deploy شدن migration `0003_auth_id_defaults.sql`، همین migration و سپس bootstrap را دوباره اجرا کنید.
 
    فرمان bootstrap فقط وقتی هر سه متغیر `SUPERADMIN_EMAIL`، `SUPERADMIN_NAME` و `SUPERADMIN_INITIAL_PASSWORD` تنظیم باشند اجرا می‌شود. رمز اولیه حداقل ۱۴ نویسه است. اجرای دوباره رمز موجود را عوض نمی‌کند و نقش‌های از قبل تخصیص‌یافته را downgrade نمی‌کند. مدیر تازه باید در اولین ورود رمز را عوض کند.
 

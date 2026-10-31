@@ -14,7 +14,7 @@ const instant = (name: string) => timestamp(name, { withTimezone: true, mode: "d
 export const users = pgTable(
   "users",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     name: text("name").notNull(),
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
@@ -33,7 +33,7 @@ export const users = pgTable(
 export const userSessions = pgTable(
   "user_sessions",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     expiresAt: instant("expires_at").notNull(),
     token: text("token").notNull(),
     createdAt: instant("created_at").notNull().defaultNow(),
@@ -51,7 +51,7 @@ export const userSessions = pgTable(
 export const userAccounts = pgTable(
   "user_accounts",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -71,7 +71,7 @@ export const userAccounts = pgTable(
 export const userVerifications = pgTable(
   "user_verifications",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: instant("expires_at").notNull(),
@@ -84,7 +84,7 @@ export const userVerifications = pgTable(
 export const platformAdmins = pgTable(
   "platform_admins",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     name: text("name").notNull(),
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
@@ -101,7 +101,7 @@ export const platformAdmins = pgTable(
 export const platformAdminSessions = pgTable(
   "platform_admin_sessions",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     expiresAt: instant("expires_at").notNull(),
     token: text("token").notNull(),
     createdAt: instant("created_at").notNull().defaultNow(),
@@ -119,7 +119,7 @@ export const platformAdminSessions = pgTable(
 export const platformAdminAccounts = pgTable(
   "platform_admin_accounts",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id").notNull().references(() => platformAdmins.id, { onDelete: "cascade" }),
@@ -139,7 +139,7 @@ export const platformAdminAccounts = pgTable(
 export const platformAdminVerifications = pgTable(
   "platform_admin_verifications",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: instant("expires_at").notNull(),
@@ -152,7 +152,7 @@ export const platformAdminVerifications = pgTable(
 export const platformAdminTwoFactors = pgTable(
   "platform_admin_two_factors",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     userId: text("user_id").notNull().references(() => platformAdmins.id, { onDelete: "cascade" }),
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
