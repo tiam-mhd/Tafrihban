@@ -53,6 +53,14 @@ export function EquipmentControls({
 
   return (
     <div className="equipment-toolbar">
+      <div className="equipment-toolbar-actions">
+        {canManage && <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><UiIcon name="plus" /> افزودن تجهیز</button>}
+        <Link className="button button-secondary" href={`/app/scan?${scopeParams}`}><UiIcon name="scan" /> اسکن QR</Link>
+        <button className="button button-secondary equipment-filter-trigger" type="button" onClick={() => setFilterOpen(true)}>
+          <UiIcon name="filter" /> فیلتر {filterCount > 0 && <span className="filter-count">{filterCount}</span>}
+        </button>
+      </div>
+
       <form action="/app/equipment" method="get" className="equipment-search" role="search">
         <input type="hidden" name="organizationId" value={organizationId} />
         <input type="hidden" name="branchId" value={branchId} />
@@ -65,14 +73,6 @@ export function EquipmentControls({
         </label>
         <button className="button button-secondary" type="submit">جستجو</button>
       </form>
-
-      <div className="equipment-toolbar-actions">
-        <button className="button button-secondary equipment-filter-trigger" type="button" onClick={() => setFilterOpen(true)}>
-          <UiIcon name="filter" /> فیلتر {filterCount > 0 && <span className="filter-count">{filterCount}</span>}
-        </button>
-        <Link className="button button-secondary" href={`/app/scan?${scopeParams}`}><UiIcon name="scan" /> اسکن QR</Link>
-        {canManage && <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><UiIcon name="plus" /> افزودن تجهیز</button>}
-      </div>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="ثبت پروندهٔ تجهیز" description="شناسهٔ QR به‌صورت تصادفی ساخته می‌شود و کد دارایی در این مجموعه یکتا است." size="large">
         <form action={createEquipmentAction} className="form-stack">

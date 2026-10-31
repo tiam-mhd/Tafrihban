@@ -22,7 +22,7 @@ const links = [
   ["گزارش‌ها", "/app/reports", "report.export"],
 ] as const;
 
-export async function OperationalShell({ scope, children, title, description, headerActions }: { scope: OperationalScope; children: ReactNode; title: string; description?: string; headerActions?: ReactNode }) {
+export async function OperationalShell({ scope, children, title, description, headerActions, headerActionsBelowTitle = false }: { scope: OperationalScope; children: ReactNode; title: string; description?: string; headerActions?: ReactNode; headerActionsBelowTitle?: boolean }) {
   const params = `organizationId=${encodeURIComponent(scope.organizationId)}&branchId=${encodeURIComponent(scope.branchId)}`;
   const granted = await pool.query<{ permission_key: string }>(
     `SELECT DISTINCT rp.permission_key
@@ -47,7 +47,7 @@ export async function OperationalShell({ scope, children, title, description, he
         <div className="sidebar-bottom"><OfflineStatus /><SignOutButton accountId={scope.actor.id} platform={false} /></div>
       </aside>
       <main className="workspace-main">
-        <header className={`page-top workspace-page-top${headerActions ? " page-top-with-actions" : ""}`}>
+        <header className={`page-top workspace-page-top${headerActions ? " page-top-with-actions" : ""}${headerActionsBelowTitle ? " page-top-actions-below" : ""}`}>
           <div className="page-top-copy"><span className="eyebrow">{scope.branchName}</span><h1>{title}</h1>{description && <p>{description}</p>}</div>
           {headerActions && <div className="page-top-actions">{headerActions}</div>}
           <span className="avatar">{scope.actor.name.slice(0, 1)}</span>

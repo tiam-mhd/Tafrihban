@@ -106,11 +106,12 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
     scope={scope}
     title="تجهیزات"
     description="پرونده‌ها، وضعیت‌ها و سوابق تجهیزات این شعبه را یک‌جا مدیریت کنید."
+    headerActionsBelowTitle
     headerActions={<EquipmentControls organizationId={scope.organizationId} branchId={scope.branchId} canManage={canManage} categories={categories.rows} creators={creators.rows} filters={filters} />}
   >
     <FormNotice searchParams={{ error: query.error, saved: query.saved }} />
     {!parsedFilters.success && <p className="notice notice-warning" role="alert">بخشی از فیلترها معتبر نبود؛ مقدارهای فیلتر را بررسی کنید.</p>}
-    <section className="equipment-results panel" aria-labelledby="equipment-results-title">
+    <section className="equipment-results" aria-labelledby="equipment-results-title">
       <div className="results-summary">
         <div><span className="eyebrow">فهرست شعبه</span><strong id="equipment-results-title">{equipment.rows.length.toLocaleString("fa-IR")} پرونده</strong></div>
         <span>شناسهٔ QR به‌تنهایی مجوز دسترسی نیست؛ همهٔ پرونده‌ها با محدودهٔ فعال کنترل می‌شوند.</span>
@@ -119,8 +120,8 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
         ? <EmptyState title={hasActiveFilters(filters) ? "تجهیزی با این فیلترها پیدا نشد" : "هنوز تجهیزی در این شعبه ثبت نشده"}>
             {hasActiveFilters(filters) ? <><span>فیلترها را پاک کنید یا عبارت دیگری جستجو کنید. </span><Link className="text-link" href={`/app/equipment?${params}`}>پاک‌کردن فیلترها</Link></> : "برای ساخت پرونده از دکمهٔ «افزودن تجهیز» در بالای صفحه استفاده کنید."}
           </EmptyState>
-        : <div className="equipment-card-grid">
-            {equipment.rows.map((item) => <article key={item.id} className={`equipment-row-card${item.status === "archived" ? " equipment-row-archived" : ""}`}>
+        : <div className="equipment-list" role="list" aria-label="فهرست تجهیزات این شعبه">
+            {equipment.rows.map((item) => <article key={item.id} role="listitem" className={`equipment-list-row${item.status === "archived" ? " equipment-row-archived" : ""}`}>
               <div className="equipment-row-main">
                 <span className="equipment-glyph"><UiIcon name="scan" size={22} /></span>
                 <div className="equipment-row-copy">

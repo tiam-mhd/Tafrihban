@@ -2,7 +2,7 @@ import { z } from "zod";
 import { pool } from "@/db";
 import { OperationalShell } from "@/components/operational-shell";
 import { AccessDenied, FormNotice } from "@/components/empty-state";
-import { CategoryManagement, type CategoryFilters, type EquipmentCategoryRecord } from "@/components/equipment/category-management";
+import { CategoryList, CategoryManagement, type CategoryFilters, type EquipmentCategoryRecord } from "@/components/equipment/category-management";
 import { hasOperationalPermission, hasOrganizationPermission, requireOperationalActor, requireOperationalScope } from "@/server/auth-guards";
 
 type Search = Promise<Record<string, string | undefined>>;
@@ -57,9 +57,11 @@ export default async function EquipmentCategoriesPage({ searchParams }: { search
     scope={scope}
     title="دسته‌بندی تجهیزات"
     description="ساختار گروه‌بندی مشترک مجموعه را مرتب کنید؛ هر دسته در تمام شعب قابل استفاده است."
-    headerActions={<CategoryManagement organizationId={scope.organizationId} branchId={scope.branchId} categories={categories.rows} filters={filters} />}
+    headerActionsBelowTitle
+    headerActions={<CategoryManagement organizationId={scope.organizationId} branchId={scope.branchId} filters={filters} />}
   >
     <FormNotice searchParams={{ error: query.error, saved: query.saved }} />
     {!parsed.success && <p className="notice notice-warning" role="alert">بعضی از فیلترها معتبر نبودند و نمایش به فیلترهای پیش‌فرض برگشت.</p>}
+    <CategoryList categories={categories.rows} filters={filters} organizationId={scope.organizationId} branchId={scope.branchId} />
   </OperationalShell>;
 }
