@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "sourceMap": false
+  },
+  "include": [
+    "tests/**/*.test.ts",
+    "src/modules/authorization/permissions.ts",
+    "src/modules/identity/platform-bootstrap.ts",
+    "src/lib/dates.ts",
+    "src/server/scope-queries.ts"
+  ],
+  "exclude": ["node_modules", ".next", ".test-dist"]
+}

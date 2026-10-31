@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.test-dist/
+out/
+coverage/
+.env
+.env.*
+!.env.example
+.data/
+private_uploads/
+*.log
+*.tsbuildinfo
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
