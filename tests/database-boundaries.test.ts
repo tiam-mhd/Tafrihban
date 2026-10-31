@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { ensureSuperadminRole } from "../src/modules/identity/platform-bootstrap";
+import { grantsPermission } from "../src/modules/authorization/permissions";
+import { PLATFORM_ADMIN_PERMISSION_QUERY } from "../src/server/platform-permission-queries";
 import { OPERATIONAL_SCOPE_QUERY } from "../src/server/scope-queries";
 
 const dbTest = process.env.DATABASE_URL ? test : test.skip;
@@ -63,6 +65,9 @@ dbTest("branch scope rejects cross-tenant and sibling-branch requests; composite
     const existingAdminId = randomUUID();
     await client.query("INSERT INTO platform_admins (id,name,email) VALUES ($1,'Existing Admin',$2)", [existingAdminId, `${existingAdminId}@example.test`]);
     await client.query("INSERT INTO platform_admin_role_assignments (id,platform_admin_id,role_id) VALUES ($1,$2,'system-platform-operator')", [randomUUID(), existingAdminId]);
+    const operatorGrants = await client.query<{ grants_all_permissions: boolean; permission_key: string | null }>(PLATFORM_ADMIN_PERMISSION_QUERY, [existingAdminId]);
+    assert.ok(operatorGrants.rows.some((row) => row.permission_key === "organization.read"));
+    assert.ok(operatorGrants.rows.every((row) => !row.grants_all_permissions));
     await ensureSuperadminRole(client, existingAdminId, false);
     const preserved = await client.query("SELECT role_id FROM platform_admin_role_assignments WHERE platform_admin_id = $1", [existingAdminId]);
     assert.deepEqual(preserved.rows.map((row) => row.role_id), ["system-platform-operator"]);
@@ -70,6 +75,15 @@ dbTest("branch scope rejects cross-tenant and sibling-branch requests; composite
     const newAdminId = randomUUID();
     await client.query("INSERT INTO platform_admins (id,name,email) VALUES ($1,'Bootstrap Admin',$2)", [newAdminId, `${newAdminId}@example.test`]);
     await ensureSuperadminRole(client, newAdminId, true);
+    const futurePermissionKey = `test.future.${randomUUID()}`;
+    await client.query("INSERT INTO platform_permissions (key,description) VALUES ($1,'Temporary wildcard regression permission')", [futurePermissionKey]);
+    const superadminGrants = await client.query<{ grants_all_permissions: boolean; permission_key: string | null }>(PLATFORM_ADMIN_PERMISSION_QUERY, [newAdminId]);
+    assert.ok(superadminGrants.rows.length > 0);
+    assert.ok(superadminGrants.rows.every((row) => row.grants_all_permissions));
+    assert.ok(superadminGrants.rows.some((row) => grantsPermission({
+      grantsAllPermissions: row.grants_all_permissions,
+      permissionKeys: new Set(row.permission_key ? [row.permission_key] : []),
+    }, futurePermissionKey)));
     await client.query("UPDATE platform_admins SET must_change_password = false WHERE id = $1", [newAdminId]);
     await ensureSuperadminRole(client, newAdminId, false);
     const bootstrapped = await client.query(

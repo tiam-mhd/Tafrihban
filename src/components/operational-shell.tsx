@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { OfflineStatus } from "@/components/offline-status";
 import { BrandLogo } from "@/components/brand-logo";
 import { pool } from "@/db";
+import { PLATFORM_ADMIN_PERMISSION_QUERY } from "@/server/platform-permission-queries";
 
 const links = [
   ["خانه", "/app", "dashboard.read"],
@@ -53,19 +54,12 @@ export async function OperationalShell({ scope, children, title }: { scope: Oper
 }
 
 export async function PlatformShell({ children, title, actorName, actorId }: { children: ReactNode; title: string; actorName: string; actorId: string }) {
-  const granted = await pool.query<{ key: string }>(
-    `SELECT DISTINCT p.key FROM platform_admin_role_assignments a
-       JOIN platform_admin_roles r ON r.id = a.role_id AND r.status = 'active'
-       LEFT JOIN platform_role_permissions p ON p.role_id = r.id
-      WHERE a.platform_admin_id = $1`, [actorId],
+  const grants = await pool.query<{ grants_all_permissions: boolean; permission_key: string | null }>(
+    PLATFORM_ADMIN_PERMISSION_QUERY,
+    [actorId],
   );
-  const rows = await pool.query<{ grants_all_permissions: boolean }>(
-    `SELECT r.grants_all_permissions FROM platform_admin_role_assignments a
-       JOIN platform_admin_roles r ON r.id = a.role_id AND r.status = 'active'
-      WHERE a.platform_admin_id = $1`, [actorId],
-  );
-  const all = rows.rows.some((row) => row.grants_all_permissions);
-  const keys = new Set(granted.rows.map((row) => row.key).filter((key): key is string => Boolean(key)));
+  const all = grants.rows.some((row) => row.grants_all_permissions);
+  const keys = new Set(grants.rows.map((row) => row.permission_key).filter((key): key is string => Boolean(key)));
   const can = (key: string) => all || keys.has(key);
   return (
     <div className="platform-frame">

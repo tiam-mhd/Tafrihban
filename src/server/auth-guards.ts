@@ -6,6 +6,7 @@ import { pool } from "@/db";
 import { operationalAuth } from "@/lib/auth";
 import { platformAuth } from "@/lib/platform-auth";
 import { grantsPermission } from "@/modules/authorization/permissions";
+import { PLATFORM_ADMIN_PERMISSION_QUERY } from "@/server/platform-permission-queries";
 import { OPERATIONAL_SCOPE_QUERY } from "@/server/scope-queries";
 
 export type OperationalActor = {
@@ -155,12 +156,8 @@ export async function assertPlatformPermission(actor: PlatformActor, permission:
 
 export async function hasPlatformPermission(actor: PlatformActor, permission: string): Promise<boolean> {
   const result = await pool.query<{ grants_all_permissions: boolean; permission_key: string | null }>(
-    `SELECT r.grants_all_permissions, rp.permission_key
-       FROM platform_admin_role_assignments a
-       JOIN platform_admin_roles r ON r.id = a.role_id AND r.status = 'active'
-       JOIN platform_admins p ON p.id = a.platform_admin_id AND p.status = 'active'
-       LEFT JOIN platform_role_permissions rp ON rp.role_id = r.id
-      WHERE p.id = $1`, [actor.id],
+    PLATFORM_ADMIN_PERMISSION_QUERY,
+    [actor.id],
   );
   return result.rows.some((row) => grantsPermission({ grantsAllPermissions: row.grants_all_permissions, permissionKeys: new Set(row.permission_key ? [row.permission_key] : []) }, permission));
 }
