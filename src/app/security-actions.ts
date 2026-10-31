@@ -58,11 +58,12 @@ export async function changePlatformPasswordAction(form: FormData): Promise<void
     );
     await client.query("COMMIT");
   } catch {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => undefined);
     invalid(path);
   } finally {
     client.release();
   }
   revalidatePath("/platform");
-  redirect("/platform?passwordChanged=1");
+  revalidatePath(path);
+  redirect(`${path}?changed=1`);
 }

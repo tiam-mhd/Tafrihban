@@ -2,9 +2,9 @@ import "server-only";
 
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { twoFactor } from "better-auth/plugins";
 import { db } from "@/db";
 import { authBaseUrl, isProduction, requiredEnv } from "@/lib/env";
+import { platformAuthPlugins } from "@/lib/platform-auth-plugins";
 import {
   platformAdminAccounts,
   platformAdminSessions,
@@ -58,7 +58,7 @@ export const platformAuth = betterAuth({
     autoSignIn: false,
     revokeSessionsOnPasswordReset: true,
   },
-  plugins: [twoFactor({ issuer: "Tafrihban Platform", twoFactorTable: "platform_admin_two_factors" })],
+  plugins: platformAuthPlugins,
   rateLimit: {
     enabled: true,
     customRules: {

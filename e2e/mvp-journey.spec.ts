@@ -9,6 +9,48 @@ const enabled = Boolean(
 test.describe("مسیر اصلی نسخهٔ اولیه", () => {
   test.skip(!enabled, "برای E2E، DATABASE_URL، حساب E2E پلتفرم و TAFRIHBAN_TEST_OTP_SINK=1 را در محیط محلی تنظیم کنید.");
 
+  test("مدیر پلتفرم می‌تواند رمز را تغییر دهد و نشست فعلی را نگه دارد", async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const email = process.env.E2E_SUPERADMIN_EMAIL!;
+    const originalPassword = process.env.E2E_SUPERADMIN_PASSWORD!;
+    const rotatedPassword = `E2E-Rotate-${randomUUID()}!`;
+    let currentPassword = originalPassword;
+
+    try {
+      await signIn(page, "/platform/login", email, originalPassword);
+      await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+
+      currentPassword = rotatedPassword;
+      await changePlatformPassword(page, originalPassword, rotatedPassword);
+      await expect(page).toHaveURL(/\/platform\/security\/change-password\?changed=1/);
+      await expect(page.getByRole("status")).toContainText("رمز با موفقیت تغییر کرد");
+      await page.goto("/platform");
+      await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+
+      await changePlatformPassword(page, rotatedPassword, originalPassword);
+      await expect(page).toHaveURL(/\/platform\/security\/change-password\?changed=1/);
+      await expect(page.getByRole("status")).toContainText("رمز با موفقیت تغییر کرد");
+      currentPassword = originalPassword;
+      await page.goto("/platform");
+      await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+    } finally {
+      if (currentPassword !== originalPassword) {
+        await context.clearCookies();
+        await signIn(page, "/platform/login", email, currentPassword);
+        try {
+          await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+          await changePlatformPassword(page, currentPassword, originalPassword);
+        } catch {
+          await context.clearCookies();
+          await signIn(page, "/platform/login", email, originalPassword);
+          await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+        }
+      }
+      await context.close();
+    }
+  });
+
   test("مدیر مجموعه می‌سازد، بازرسی را ثبت می‌کند و کار تعمیراتی را می‌بندد", async ({ browser }) => {
     const connectionString = process.env.DATABASE_URL!;
     const database = new Pool({ connectionString, max: 2 });
@@ -171,6 +213,14 @@ async function signIn(page: import("@playwright/test").Page, path: string, email
   await page.getByLabel("ایمیل").fill(email);
   await page.getByLabel("رمز عبور").fill(password);
   await page.getByRole("button", { name: "ورود امن" }).click();
+}
+
+async function changePlatformPassword(page: import("@playwright/test").Page, currentPassword: string, newPassword: string) {
+  await page.goto("/platform/security/change-password");
+  await page.getByLabel("رمز فعلی").fill(currentPassword);
+  await page.getByLabel("رمز تازه، حداقل ۱۴ نویسه").fill(newPassword);
+  await page.getByLabel("تکرار رمز تازه").fill(newPassword);
+  await page.getByRole("button", { name: "تغییر رمز" }).click();
 }
 
 async function waitForRow<T extends QueryResultRow>(database: Pool, query: string, values: unknown[]): Promise<T> {

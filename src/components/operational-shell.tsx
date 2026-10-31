@@ -82,6 +82,7 @@ export async function PlatformShell({ children, title, actorName, actorId }: { c
           {can("platform_admin.manage") && <Link href="/platform/roles">نقش‌های پلتفرم</Link>}
           {can("platform_settings.manage") && <Link href="/platform/settings">تنظیمات</Link>}
           {can("platform_audit.read") && <Link href="/platform/audit">دفتر حسابرسی</Link>}
+          <Link href="/platform/security/change-password">تغییر رمز مدیر</Link>
           <Link href="/platform/security">امنیت مدیر</Link>
         </aside>
         <main className="platform-main"><header className="page-top"><div><span className="eyebrow">مدیریت سراسری</span><h1>{title}</h1></div><span className="pill pill-danger">محیط پلتفرم</span></header>{children}</main>
