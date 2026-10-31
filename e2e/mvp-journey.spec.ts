@@ -12,6 +12,8 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
   test("مدیر پلتفرم می‌تواند رمز را تغییر دهد و نشست فعلی را نگه دارد", async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
+    const otherContext = await browser.newContext();
+    const otherPage = await otherContext.newPage();
     const email = process.env.E2E_SUPERADMIN_EMAIL!;
     const originalPassword = process.env.E2E_SUPERADMIN_PASSWORD!;
     const rotatedPassword = `E2E-Rotate-${randomUUID()}!`;
@@ -20,11 +22,15 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
     try {
       await signIn(page, "/platform/login", email, originalPassword);
       await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
+      await signIn(otherPage, "/platform/login", email, originalPassword);
+      await expect(otherPage).toHaveURL(/\/platform(?:\?.*)?$/);
 
       currentPassword = rotatedPassword;
       await changePlatformPassword(page, originalPassword, rotatedPassword);
       await expect(page).toHaveURL(/\/platform\/security\/change-password\?changed=1/);
       await expect(page.getByRole("status")).toContainText("رمز با موفقیت تغییر کرد");
+      await otherPage.goto("/platform");
+      await expect(otherPage).toHaveURL(/\/platform\/login(?:\?.*)?$/);
       await page.goto("/platform");
       await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
 
@@ -47,6 +53,7 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
           await expect(page).toHaveURL(/\/platform(?:\?.*)?$/);
         }
       }
+      await otherContext.close();
       await context.close();
     }
   });

@@ -25,7 +25,9 @@ export default async function PlatformPasswordPage({ searchParams }: { searchPar
     <h1>{account.must_change_password ? "رمز موقت را تغییر دهید" : "تغییر رمز مدیر"}</h1>
     <p>رمز تازه باید دست‌کم ۱۴ نویسه داشته باشد. پس از تغییر رمز، نشست‌های دیگر این حساب باطل می‌شوند.</p>
     {query.changed && <p className="notice notice-success" role="status">رمز با موفقیت تغییر کرد.</p>}
-    {query.error && <p className="notice notice-warning" role="alert">رمز فعلی معتبر نیست یا تغییر رمز کامل نشد. رمزها را بررسی کنید و دوباره تلاش کنید.</p>}
+    {query.error === "failed"
+      ? <p className="notice notice-warning" role="alert">عملیات تغییر رمز در سرور کامل نشد. دوباره تلاش کنید؛ اگر خطا باقی ماند با مدیر سامانه تماس بگیرید.</p>
+      : query.error && <p className="notice notice-warning" role="alert">رمز فعلی معتبر نیست یا رمز تازه با تکرارش یکسان نیست.</p>}
     <form action={changePlatformPasswordAction} className="stack-form">
       <label className="field-label">رمز فعلی<input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} /></label>
       <label className="field-label">رمز تازه، حداقل ۱۴ نویسه<input name="newPassword" type="password" autoComplete="new-password" required minLength={14} maxLength={128} /></label>
