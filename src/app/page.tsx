@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function HomePage() {
   return (
     <main className="public-page landing-page">
-      <header className="public-header"><Link href="/" className="brand-lockup"><span className="brand-mark">ت</span><span>تفریح‌بان<small>بازرسی و نگهداری تجهیزات</small></span></Link><Link href="/platform/login" className="quiet-link">مدیریت پلتفرم</Link></header>
+      <header className="public-header"><Link href="/" className="brand-lockup"><BrandLogo /><span>تفریح‌بان<small>بازرسی و نگهداری تجهیزات</small></span></Link><Link href="/platform/login" className="quiet-link">مدیریت پلتفرم</Link></header>
       <section className="hero-grid">
         <div className="hero-copy"><span className="eyebrow eyebrow-pill">برای کار واقعی در محل تجهیز</span><h1>هر تجهیز، یک پروندهٔ روشن.<br /><em>هر اقدام، قابل پیگیری.</em></h1><p>بازرسی‌های زمان‌بندی‌شده، ثبت ایراد و پیگیری تعمیر در یک فضای امن و فارسی‌محور؛ حتی وقتی اینترنت پایدار نیست.</p><div className="hero-actions"><Link href="/login" className="button button-primary button-large">ورود کاربر مجموعه</Link><Link href="/platform/login" className="text-link">ورود مدیر پلتفرم</Link></div><div className="hero-assurance"><span>✓ محدودهٔ جدا برای هر سازمان</span><span>✓ صف آفلاین با تأیید سرور</span><span>✓ تصمیم ایمنی با متخصص انسانی</span></div></div>
         <div className="hero-art" aria-label="نمای شماتیک مسیر بازرسی" role="img"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="equipment-illustration"><div className="tower" /><div className="wheel"><span /><i /><i /><i /><i /></div><div className="asset-card"><span className="mini-tag">پروندهٔ تجهیز</span><strong>ثبت و پیگیری</strong><small>بازرسی · عیب · تعمیر</small></div><div className="check-card"><span className="check-dot">✓</span><span>اقدام اصلاحی ثبت شد</span></div></div></div>

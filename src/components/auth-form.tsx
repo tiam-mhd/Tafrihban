@@ -5,10 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { operationalAuthClient, platformAuthClient } from "@/lib/auth-client";
+import { normalizeIranianMobile } from "@/modules/identity/iranian-phone";
 
 export function AuthForm({ platform = false }: { platform?: boolean }) {
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -18,36 +17,123 @@ export function AuthForm({ platform = false }: { platform?: boolean }) {
     return () => window.removeEventListener("tafrihban:platform-two-factor", verifyTwoFactor);
   }, [platform, router]);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  if (!platform) return <OperationalOtpForm />;
+
+  async function submitPlatformLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
-    setError("");
     const values = new FormData(event.currentTarget);
     const input = { email: String(values.get("email") || "").trim().toLowerCase(), password: String(values.get("password") || "") };
     try {
-      const result = platform
-        ? await platformAuthClient.signIn.email({ ...input, callbackURL: "/platform" })
-        : await operationalAuthClient.signIn.email({ ...input, callbackURL: "/app/select-scope" });
+      const result = await platformAuthClient.signIn.email({ ...input, callbackURL: "/platform" });
+      if (result.error) return;
+      router.replace("/platform");
+      router.refresh();
+    } catch { /* Keep platform login errors generic. */ }
+  }
+
+  return <form onSubmit={submitPlatformLogin} className="form-stack auth-form">
+    <label className="field-label">ایمیل<input type="email" name="email" autoComplete="username" required maxLength={254} /></label>
+    <label className="field-label">رمز عبور<input type="password" name="password" autoComplete="current-password" required minLength={14} maxLength={128} /></label>
+    <button className="button button-primary button-large" type="submit">ورود امن</button>
+    <p className="tiny-note">ایجاد حساب مدیر پلتفرم فقط از راه bootstrap کنترل‌شده انجام می‌شود.</p>
+  </form>;
+}
+
+function OperationalOtpForm() {
+  const [phone, setPhone] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [code, setCode] = useState("");
+  const [codeRequested, setCodeRequested] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+
+  async function requestCode() {
+    const normalized = normalizeIranianMobile(phone);
+    if (!normalized) {
+      setError("شمارهٔ همراه ایران را به‌شکل ۰۹… یا ‎+۹۸… وارد کنید.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setPhoneNumber(normalized);
+    setCodeRequested(true);
+    try {
+      await operationalAuthClient.phoneNumber.sendOtp({ phoneNumber: normalized });
+    } catch {
+      // The same next step is shown for known, unknown, and unavailable accounts.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!codeRequested) {
+      await requestCode();
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await operationalAuthClient.phoneNumber.verify({ phoneNumber, code: code.trim() });
       if (result.error) {
-        setError("ورود انجام نشد. ایمیل و رمز را بررسی کنید یا با مدیر حساب تماس بگیرید.");
+        setError("کد معتبر نیست یا مهلتش تمام شده است. کد تازه بگیرید و دوباره تلاش کنید.");
         return;
       }
-      router.replace(platform ? "/platform" : "/app/select-scope");
+      router.replace("/app/select-scope");
       router.refresh();
     } catch {
-      setError("ارتباط با سرویس ورود برقرار نشد. چند لحظه بعد دوباره تلاش کنید.");
+      setError("ورود انجام نشد. کد تازه بگیرید یا با مدیر محدوده تماس بگیرید.");
     } finally {
       setBusy(false);
     }
   }
 
   return <form onSubmit={submit} className="form-stack auth-form">
-    <label className="field-label">ایمیل<input type="email" name="email" autoComplete="username" required maxLength={254} /></label>
-    <label className="field-label">رمز عبور<input type="password" name="password" autoComplete="current-password" required minLength={platform ? 14 : 12} maxLength={128} /></label>
+    <label className="field-label">شمارهٔ همراه ثبت‌شده
+      <input
+        type="tel"
+        name="phone"
+        dir="ltr"
+        inputMode="tel"
+        autoComplete="tel"
+        required
+        minLength={7}
+        maxLength={30}
+        value={phone}
+        disabled={codeRequested}
+        onChange={(event) => setPhone(event.target.value)}
+        placeholder="09..."
+      />
+    </label>
+    {codeRequested && <>
+      <p className="notice notice-info" role="status">اگر این شماره به حساب فعالی متصل باشد، کد ورود ارسال می‌شود. برای ساخت حساب با مدیر مجموعه یا شعبه تماس بگیرید.</p>
+      <label className="field-label">کد یک‌بارمصرف شش‌رقمی
+        <input
+          type="text"
+          name="code"
+          dir="ltr"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]{6}"
+          minLength={6}
+          maxLength={6}
+          required
+          value={code}
+          onChange={(event) => setCode(event.target.value.replace(/[^0-9]/g, ""))}
+        />
+      </label>
+    </>}
     {error && <p className="notice notice-warning" role="alert">{error}</p>}
-    <button className="button button-primary button-large" type="submit" disabled={busy}>{busy ? "در حال بررسی…" : "ورود امن"}</button>
-    {!platform && <p className="tiny-note">برای ساخت یا بازیابی حساب با مدیر مجموعه تماس بگیرید.</p>}
-    {platform && <p className="tiny-note">ایجاد حساب مدیر پلتفرم فقط از راه bootstrap کنترل‌شده انجام می‌شود.</p>}
+    {!codeRequested
+      ? <button className="button button-primary button-large" type="submit" disabled={busy}>{busy ? "در حال ارسال…" : "دریافت کد ورود"}</button>
+      : <div className="otp-actions">
+        <button className="button button-primary button-large" type="submit" disabled={busy || code.length !== 6}>{busy ? "در حال بررسی…" : "تأیید و ورود"}</button>
+        <button className="button button-secondary" type="button" onClick={() => void requestCode()} disabled={busy}>ارسال دوبارهٔ کد</button>
+        <button className="link-button" type="button" onClick={() => { setCodeRequested(false); setCode(""); setError(""); }}>ویرایش شماره</button>
+      </div>}
+    <p className="tiny-note">ثبت‌نام عمومی فعال نیست؛ حساب باید پیش‌تر توسط مدیر محدوده ساخته شده باشد.</p>
   </form>;
 }
 

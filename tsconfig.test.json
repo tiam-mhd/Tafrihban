@@ -12,6 +12,9 @@
     "tests/**/*.test.ts",
     "src/modules/authorization/permissions.ts",
     "src/modules/identity/platform-bootstrap.ts",
+    "src/modules/identity/iranian-phone.ts",
+    "src/modules/identity/pars-green-otp.ts",
+    "src/modules/identity/member-management-policy.ts",
     "src/lib/dates.ts",
     "src/server/scope-queries.ts"
   ],

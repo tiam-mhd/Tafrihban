@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { hashPassword } from "better-auth/crypto";
 import { pool } from "@/db";
 import { platformAuth } from "@/lib/platform-auth";
 import { createDefaultOperationalRoles } from "@/modules/organizations/default-roles";
 import { createOperationalUser, removeUnusedOperationalUser } from "@/modules/identity/accounts";
+import { normalizeIranianMobile } from "@/modules/identity/iranian-phone";
 import { assertPlatformPermission, requirePlatformActor } from "@/server/auth-guards";
 import { insertPlatformAudit } from "@/server/transactions";
 
@@ -36,16 +36,16 @@ export async function createOrganizationAction(form: FormData): Promise<void> {
     branchName: z.string().min(2).max(120),
     branchCode: z.string().min(2).max(20).regex(/^[A-Za-z0-9_-]+$/),
     managerName: z.string().min(2).max(120),
-    managerEmail: z.email().max(254),
-    managerPassword: z.string().min(12).max(128),
+    managerPhone: z.string().min(7).max(30),
   }).safeParse({
     organizationName: text(form, "organizationName"), slug: text(form, "slug"),
     organizationTimezone: text(form, "organizationTimezone") || "Asia/Tehran",
     branchName: text(form, "branchName"), branchCode: text(form, "branchCode"),
-    managerName: text(form, "managerName"), managerEmail: text(form, "managerEmail"),
-    managerPassword: raw(form, "managerPassword"),
+    managerName: text(form, "managerName"), managerPhone: text(form, "managerPhone"),
   });
   if (!parsed.success) fail("/platform/organizations/new", "invalid");
+  const managerPhone = normalizeIranianMobile(parsed.data.managerPhone);
+  if (!managerPhone) fail("/platform/organizations/new", "invalid-phone");
   try {
     new Intl.DateTimeFormat("en", { timeZone: parsed.data.organizationTimezone });
   } catch {
@@ -55,9 +55,8 @@ export async function createOrganizationAction(form: FormData): Promise<void> {
   let manager: { id: string; created: boolean };
   try {
     manager = await createOperationalUser({
-      email: parsed.data.managerEmail,
+      phone: managerPhone,
       name: parsed.data.managerName,
-      password: parsed.data.managerPassword,
     });
   } catch {
     fail("/platform/organizations/new", "manager-account");
@@ -171,43 +170,40 @@ export async function createPlatformAdminAction(form: FormData): Promise<void> {
   redirect("/platform/admins?saved=1");
 }
 
-export async function recoverOperationalAccountAction(form: FormData): Promise<void> {
+export async function manageOperationalAccountAction(form: FormData): Promise<void> {
   const actor = await requirePlatformActor();
-  await assertPlatformPermission(actor, "operational_account.recover");
+  await assertPlatformPermission(actor, "operational_account.manage");
   const parsed = z.object({
-    email: z.email().max(254),
-    temporaryPassword: z.string().min(12).max(128),
+    phone: z.string().min(7).max(30),
+    status: z.enum(["active", "suspended"]),
     reason: z.string().min(8).max(300),
     confirmation: z.literal("yes"),
   }).safeParse({
-    email: text(form, "email"),
-    temporaryPassword: raw(form, "temporaryPassword"),
+    phone: text(form, "phone"),
+    status: text(form, "status"),
     reason: text(form, "reason"),
     confirmation: text(form, "confirmation"),
   });
   if (!parsed.success) fail("/platform/accounts", "invalid");
-  const email = parsed.data.email.toLowerCase();
-  const encodedPassword = await hashPassword(parsed.data.temporaryPassword);
+  const phone = normalizeIranianMobile(parsed.data.phone);
+  if (!phone) fail("/platform/accounts", "invalid-phone");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const user = await client.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1 FOR UPDATE", [email]);
+    const user = await client.query<{ id: string }>(
+      "SELECT id FROM users WHERE phone_number = $1 FOR UPDATE",
+      [phone],
+    );
     if (!user.rowCount) throw new Error("account missing");
-    const account = await client.query<{ id: string }>("SELECT id FROM user_accounts WHERE user_id = $1 AND provider_id = 'credential' FOR UPDATE", [user.rows[0]!.id]);
-    if (account.rowCount) {
-      await client.query("UPDATE user_accounts SET password = $1, updated_at = now() WHERE id = $2", [encodedPassword, account.rows[0]!.id]);
-    } else {
-      await client.query(
-        `INSERT INTO user_accounts (id, account_id, provider_id, user_id, password)
-         VALUES ($1, $2, 'credential', $2, $3)`,
-        [randomUUID(), user.rows[0]!.id, encodedPassword],
-      );
-    }
-    await client.query("UPDATE users SET must_change_password = true, updated_at = now() WHERE id = $1", [user.rows[0]!.id]);
+    await client.query("UPDATE users SET status = $1, updated_at = now() WHERE id = $2", [parsed.data.status, user.rows[0]!.id]);
     const sessions = await client.query("DELETE FROM user_sessions WHERE user_id = $1", [user.rows[0]!.id]);
     await insertPlatformAudit(client, {
-      actorId: actor.id, action: "operational_account.credential_recovered", entityType: "user", entityId: user.rows[0]!.id,
-      reason: parsed.data.reason, metadata: { sessionsRevoked: sessions.rowCount ?? 0, temporaryPasswordIssued: true },
+      actorId: actor.id,
+      action: parsed.data.status === "active" ? "operational_account.activated" : "operational_account.suspended",
+      entityType: "user",
+      entityId: user.rows[0]!.id,
+      reason: parsed.data.reason,
+      metadata: { status: parsed.data.status, sessionsRevoked: sessions.rowCount ?? 0 },
     });
     await client.query("COMMIT");
   } catch {
@@ -215,7 +211,7 @@ export async function recoverOperationalAccountAction(form: FormData): Promise<v
     fail("/platform/accounts", "could-not-save");
   } finally { client.release(); }
   revalidatePath("/platform/accounts");
-  redirect(`/platform/accounts?email=${encodeURIComponent(email)}&saved=1`);
+  redirect("/platform/accounts?saved=1");
 }
 
 export async function createPlatformRoleAction(form: FormData): Promise<void> {

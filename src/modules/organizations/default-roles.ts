@@ -13,7 +13,7 @@ const ROLE_DEFINITIONS = [
     name: "مدیر شعبه",
     description: "مدیریت کارهای روزمره در شعبهٔ واگذارشده.",
     permissions: [
-      "dashboard.read", "equipment.read", "equipment.manage", "checklist.read", "inspection_schedule.manage",
+      "dashboard.read", "member.manage", "equipment.read", "equipment.manage", "checklist.read", "inspection_schedule.manage",
       "inspection.read", "inspection.create", "defect.manage", "work_order.manage", "work_order.close", "report.export", "audit.read",
     ],
   },

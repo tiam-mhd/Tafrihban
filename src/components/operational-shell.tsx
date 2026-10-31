@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { OperationalScope } from "@/server/auth-guards";
 import { SignOutButton } from "@/components/sign-out-button";
 import { OfflineStatus } from "@/components/offline-status";
+import { BrandLogo } from "@/components/brand-logo";
 import { pool } from "@/db";
 
 const links = [
@@ -35,7 +36,7 @@ export async function OperationalShell({ scope, children, title }: { scope: Oper
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link href={`/app?${params}`} className="brand-lockup"><span className="brand-mark">ت</span><span>تفریح‌بان<small>پروندهٔ عملیات</small></span></Link>
+        <Link href={`/app?${params}`} className="brand-lockup"><BrandLogo appearance="teal" /><span>تفریح‌بان<small>پروندهٔ عملیات</small></span></Link>
         <div className="scope-card"><span className="eyebrow">محدودهٔ فعال</span><strong>{scope.organizationName}</strong><span>{scope.branchName}</span><Link href="/app/select-scope">تغییر مجموعه یا شعبه</Link></div>
         <nav className="side-nav" aria-label="ناوبری اصلی">
           {links.filter(([, , permission]) => permissionKeys.has(permission)).map(([label, href]) => <Link key={href} href={`${href}?${params}`}>{label}</Link>)}
@@ -69,14 +70,14 @@ export async function PlatformShell({ children, title, actorName, actorId }: { c
   return (
     <div className="platform-frame">
       <header className="platform-top">
-        <Link href="/platform" className="brand-lockup"><span className="brand-mark platform-mark">پ</span><span>مدیریت پلتفرم<small>تفریح‌بان</small></span></Link>
+        <Link href="/platform" className="brand-lockup"><BrandLogo appearance="platform" /><span>مدیریت پلتفرم<small>تفریح‌بان</small></span></Link>
         <div className="platform-top-right"><span>{actorName}</span><SignOutButton platform accountId="" /></div>
       </header>
       <div className="platform-body">
         <aside className="platform-nav" aria-label="مدیریت پلتفرم">
           <Link href="/platform">نمای کلی</Link>
           {can("organization.read") && <Link href="/platform/organizations">سازمان‌ها</Link>}
-          {can("operational_account.recover") && <Link href="/platform/accounts">بازیابی حساب عملیاتی</Link>}
+          {can("operational_account.manage") && <Link href="/platform/accounts">مدیریت حساب‌های عملیاتی</Link>}
           {can("platform_admin.manage") && <Link href="/platform/admins">مدیران پلتفرم</Link>}
           {can("platform_admin.manage") && <Link href="/platform/roles">نقش‌های پلتفرم</Link>}
           {can("platform_settings.manage") && <Link href="/platform/settings">تنظیمات</Link>}

@@ -66,7 +66,10 @@ Inspect the repository and its current instructions before editing. Preserve wor
 - Run `npm.cmd test` for unit/database-boundary coverage and `npm.cmd run e2e` for the browser journey. DB tests skip when `DATABASE_URL` is absent; full E2E requires a migrated disposable database and a pre-rotated test SUPERADMIN.
 - Local private filesystem storage is a development/single-host provider. Production multi-host deployment needs a durable private provider, backup/retention and upload scanning before rollout.
 - MVP limitations are listed in README and the technical spec. Do not present CSV as PDF, text evidence as an uploaded work-order attachment, optional TOTP as enforced MFA, or application checks as PostgreSQL RLS.
-- Keep platform recovery operator-mediated until an email/SMS provider and delivery policy are configured. Never expose the temporary credential in audit metadata or logs.
+- Operational accounts are created by the manager of their scope and authenticate only with server-delivered ParsGreen phone OTP. Public self-registration and operational passwords are disabled. Keep `PARSGREEN_API_TOKEN` server-only; never use a `NEXT_PUBLIC_` name or log token, OTP, or mobile number.
+- Platform administrators remain on their separate email/password/TOTP path. Their recovery remains operator-mediated until a platform-specific email/recovery provider is configured.
+- Branch managers may add/revoke ordinary roles only inside their branch. Only platform admins create organization managers; only organization managers create branch managers, and each branch-manager assignment must be branch-scoped.
+- Brand logos live in `public/Light-Logo.png` (dark artwork for light surfaces) and `public/Dark-Logo.png` (light artwork for dark surfaces). Load the bundled Vazirmatn Variable font from the local package; do not add runtime font requests to third-party hosts.
 
 ## Change control
 

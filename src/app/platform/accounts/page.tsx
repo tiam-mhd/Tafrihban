@@ -1,29 +1,64 @@
 import { pool } from "@/db";
 import { PlatformShell } from "@/components/operational-shell";
 import { EmptyState, FormNotice } from "@/components/empty-state";
-import { recoverOperationalAccountAction } from "@/app/platform/actions";
+import { manageOperationalAccountAction } from "@/app/platform/actions";
+import { normalizeIranianMobile } from "@/modules/identity/iranian-phone";
 import { requirePlatformActor, hasPlatformPermission } from "@/server/auth-guards";
 
-type Search = Promise<{ email?: string; error?: string; saved?: string }>;
+type Search = Promise<{ phone?: string; error?: string; saved?: string }>;
 
 export default async function OperationalAccountsPage({ searchParams }: { searchParams: Search }) {
   const actor = await requirePlatformActor();
   const query = await searchParams;
-  if (!(await hasPlatformPermission(actor, "operational_account.recover"))) return <PlatformShell title="بازیابی حساب عملیاتی" actorName={actor.name} actorId={actor.id}><p className="notice notice-warning">اجازهٔ بازیابی سراسری حساب را ندارید.</p></PlatformShell>;
-  const email = query.email?.trim().toLowerCase().slice(0, 254) || "";
-  const found = email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? await pool.query<{ id: string; name: string; email: string; status: string; membership_count: string; credential_exists: boolean }>(
-    `SELECT u.id, u.name, u.email, u.status, count(DISTINCT om.organization_id)::text AS membership_count,
-            bool_or(ua.provider_id = 'credential') AS credential_exists
-       FROM users u LEFT JOIN organization_memberships om ON om.user_id = u.id
-       LEFT JOIN user_accounts ua ON ua.user_id = u.id
-      WHERE lower(u.email) = $1 GROUP BY u.id LIMIT 1`, [email]) : { rows: [] as { id: string; name: string; email: string; status: string; membership_count: string; credential_exists: boolean }[] };
-  const user = found.rows[0];
-  return <PlatformShell title="بازیابی حساب عملیاتی" actorName={actor.name} actorId={actor.id}>
+  const allowed = await hasPlatformPermission(actor, "operational_account.manage");
+  if (!allowed) return <PlatformShell title="مدیریت حساب‌های عملیاتی" actorName={actor.name} actorId={actor.id}><p className="notice notice-warning">اجازهٔ مدیریت سراسری حساب‌های عملیاتی را ندارید.</p></PlatformShell>;
+
+  const phoneInput = query.phone?.trim().slice(0, 30) || "";
+  const normalizedPhone = phoneInput ? normalizeIranianMobile(phoneInput) : null;
+  const found = normalizedPhone
+    ? await pool.query<{
+      id: string;
+      name: string;
+      phone_number: string;
+      phone_number_verified: boolean;
+      status: string;
+      membership_count: string;
+    }>(
+      "SELECT u.id, u.name, u.phone_number, u.phone_number_verified, u.status, " +
+        "count(DISTINCT om.organization_id)::text AS membership_count " +
+        "FROM users u LEFT JOIN organization_memberships om ON om.user_id = u.id " +
+        "WHERE u.phone_number = $1 GROUP BY u.id LIMIT 1",
+      [normalizedPhone],
+    )
+    : null;
+  const user = found?.rows[0];
+  const nextStatus = user?.status === "active" ? "suspended" : "active";
+
+  return <PlatformShell title="مدیریت حساب‌های عملیاتی" actorName={actor.name} actorId={actor.id}>
     <FormNotice searchParams={query} />
-    <section className="panel"><h2>پیداکردن حساب</h2><form method="get" className="manual-lookup"><label className="field-label">ایمیل حساب عملیاتی<input name="email" type="email" dir="ltr" required maxLength={254} defaultValue={email} /></label><button className="button button-secondary" type="submit">جست‌وجو</button></form>
-      {email && !user && <EmptyState title="حسابی پیدا نشد">بررسی کنید ایمیل را درست وارد کرده‌اید.</EmptyState>}
-      {user && <div className="notice notice-info section-spaced"><strong>{user.name}</strong> · <span dir="ltr">{user.email}</span><br />وضعیت حساب: {user.status === "active" ? "فعال" : "معلق"} · عضویت در {user.membership_count} مجموعه · رمز ورود: {user.credential_exists ? "تنظیم‌شده" : "تنظیم‌نشده"}</div>}
+    <section className="panel">
+      <h2>پیداکردن حساب با شمارهٔ همراه</h2>
+      <form method="get" className="manual-lookup">
+        <label className="field-label">شمارهٔ همراه<input name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" required maxLength={30} defaultValue={phoneInput} /></label>
+        <button className="button button-secondary" type="submit">جست‌وجو</button>
+      </form>
+      {phoneInput && !normalizedPhone && <p className="notice notice-warning section-spaced" role="alert">شمارهٔ همراه ایران معتبر نیست.</p>}
+      {normalizedPhone && !user && <EmptyState title="حسابی پیدا نشد">بررسی کنید شمارهٔ همراه درست وارد شده باشد.</EmptyState>}
+      {user && <div className="notice notice-info section-spaced">
+        <strong>{user.name}</strong> · <span dir="ltr">{user.phone_number}</span><br />
+        وضعیت حساب: {user.status === "active" ? "فعال" : "معلق"} · تأیید شماره: {user.phone_number_verified ? "تأییدشده" : "تأییدنشده"} · عضویت در {user.membership_count} مجموعه
+      </div>}
     </section>
-    <section className="panel narrow-panel"><h2>تنظیم رمز موقت</h2><p className="lede">این اقدام برای حساب سراسری است: رمز ورود عوض می‌شود، همهٔ نشست‌های عملیاتی باطل می‌شوند و تغییر رمز در ورود بعدی اجباری است. رمز موقت را فقط از راه امن خارج از سامانه به صاحب حساب برسانید.</p><form action={recoverOperationalAccountAction} className="form-stack"><label className="field-label">ایمیل حساب<input name="email" type="email" required maxLength={254} dir="ltr" defaultValue={email} /></label><label className="field-label">رمز موقت تازه، حداقل ۱۲ نویسه<input name="temporaryPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password" /></label><label className="field-label">دلیل درخواست<input name="reason" required minLength={8} maxLength={300} /></label><label className="checklist-item"><input type="checkbox" name="confirmation" value="yes" required /><span>می‌دانم همهٔ نشست‌های عملیاتی این حساب در همهٔ مجموعه‌ها باطل می‌شود.</span></label><button className="button button-primary" type="submit">تنظیم رمز و باطل‌کردن نشست‌ها</button></form></section>
+    {user && <section className="panel narrow-panel">
+      <h2>{nextStatus === "suspended" ? "تعلیق حساب و لغو نشست‌ها" : "فعال‌سازی حساب"}</h2>
+      <p className="lede">این تغییر سراسری است و نشست‌های عملیاتی فعلی کاربر در همهٔ مجموعه‌ها را باطل می‌کند. عضویت‌ها و سوابق نگه داشته می‌شوند.</p>
+      <form action={manageOperationalAccountAction} className="form-stack">
+        <input type="hidden" name="phone" value={user.phone_number} />
+        <input type="hidden" name="status" value={nextStatus} />
+        <label className="field-label">دلیل درخواست<input name="reason" required minLength={8} maxLength={300} /></label>
+        <label className="checklist-item"><input type="checkbox" name="confirmation" value="yes" required /><span>می‌دانم نشست‌های این حساب در همهٔ مجموعه‌ها لغو می‌شود.</span></label>
+        <button className={nextStatus === "suspended" ? "button button-danger" : "button button-primary"} type="submit">{nextStatus === "suspended" ? "تعلیق حساب" : "فعال‌سازی حساب"}</button>
+      </form>
+    </section>}
   </PlatformShell>;
 }

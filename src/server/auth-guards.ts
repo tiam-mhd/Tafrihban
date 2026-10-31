@@ -34,9 +34,8 @@ export async function requireOperationalActor(): Promise<OperationalActor> {
   const session = await operationalAuth.api.getSession({ headers: await headers() });
   if (!session?.user?.id) redirect("/login");
 
-  const user = await pool.query<{ status: string; must_change_password: boolean }>("SELECT status, must_change_password FROM users WHERE id = $1", [session.user.id]);
+  const user = await pool.query<{ status: string }>("SELECT status FROM users WHERE id = $1", [session.user.id]);
   if (user.rows[0]?.status !== "active") redirect("/login?reason=inactive");
-  if (user.rows[0]?.must_change_password) redirect("/app/security/change-password");
 
   return { id: session.user.id, name: session.user.name, email: session.user.email };
 }

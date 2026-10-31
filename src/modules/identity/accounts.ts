@@ -1,34 +1,40 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { pool } from "@/db";
-import { operationalAuth } from "@/lib/auth";
+import { normalizeIranianMobile } from "@/modules/identity/iranian-phone";
 
-export async function findOperationalUser(email: string): Promise<{ id: string; name: string } | null> {
+export async function findOperationalUser(phone: string): Promise<{ id: string; name: string } | null> {
+  const phoneNumber = normalizeIranianMobile(phone);
+  if (!phoneNumber) return null;
   const result = await pool.query<{ id: string; name: string }>(
-    "SELECT id, name FROM users WHERE email = $1 AND status = 'active'",
-    [email.trim().toLowerCase()],
+    "SELECT id, name FROM users WHERE phone_number = $1 AND status = 'active'",
+    [phoneNumber],
   );
   return result.rows[0] ?? null;
 }
 
 export async function createOperationalUser(input: {
-  email: string;
+  phone: string;
   name: string;
-  password: string;
 }): Promise<{ id: string; created: boolean }> {
-  const email = input.email.trim().toLowerCase();
-  const existing = await findOperationalUser(email);
+  const phoneNumber = normalizeIranianMobile(input.phone);
+  if (!phoneNumber) throw new Error("A valid Iranian mobile number is required");
+  const existing = await findOperationalUser(phoneNumber);
   if (existing) return { id: existing.id, created: false };
 
-  const result = await operationalAuth.api.signUpEmail({
-    body: {
-      email,
-      name: input.name.trim(),
-      password: input.password,
-    },
-  });
-  await pool.query("UPDATE users SET must_change_password = true WHERE id = $1", [result.user.id]);
-  return { id: result.user.id, created: true };
+  const id = randomUUID();
+  const email = "ops." + id + "@accounts.tafrihban.invalid";
+  const result = await pool.query<{ id: string }>(
+    "INSERT INTO users (id, name, email, phone_number, status) " +
+      "VALUES ($1, $2, $3, $4, 'active') ON CONFLICT DO NOTHING RETURNING id",
+    [id, input.name.trim(), email, phoneNumber],
+  );
+  if (result.rows[0]) return { id: result.rows[0].id, created: true };
+
+  const raced = await findOperationalUser(phoneNumber);
+  if (raced) return { id: raced.id, created: false };
+  throw new Error("The operational mobile number is already reserved");
 }
 
 export async function removeUnusedOperationalUser(userId: string): Promise<void> {

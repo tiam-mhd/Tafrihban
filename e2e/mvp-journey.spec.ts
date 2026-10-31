@@ -1,13 +1,13 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Pool, type QueryResultRow } from "pg";
 import { expect, test } from "@playwright/test";
 
 const enabled = Boolean(
-  process.env.DATABASE_URL && process.env.E2E_SUPERADMIN_EMAIL && process.env.E2E_SUPERADMIN_PASSWORD,
+  process.env.DATABASE_URL && process.env.E2E_SUPERADMIN_EMAIL && process.env.E2E_SUPERADMIN_PASSWORD && process.env.TAFRIHBAN_TEST_OTP_SINK === "1",
 );
 
 test.describe("مسیر اصلی نسخهٔ اولیه", () => {
-  test.skip(!enabled, "برای اجرای مرورگر، DATABASE_URL و مدیر پلتفرم E2E را در محیط محلی تنظیم کنید.");
+  test.skip(!enabled, "برای E2E، DATABASE_URL، حساب E2E پلتفرم و TAFRIHBAN_TEST_OTP_SINK=1 را در محیط محلی تنظیم کنید.");
 
   test("مدیر مجموعه می‌سازد، بازرسی را ثبت می‌کند و کار تعمیراتی را می‌بندد", async ({ browser }) => {
     const connectionString = process.env.DATABASE_URL!;
@@ -18,10 +18,8 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
     const slug = `e2e-${nonce}`;
     const organizationName = `مجموعهٔ آزمون ${nonce}`;
     const branchName = `شعبهٔ آزمون ${nonce}`;
-    const managerEmail = `e2e.${nonce}@example.test`;
+    const managerPhone = `+989${Math.floor(Math.random() * 1_000_000_000).toString().padStart(9, "0")}`;
     const managerName = `بازرس آزمون ${nonce}`;
-    const temporaryPassword = randomBytes(18).toString("base64url");
-    const newPassword = randomBytes(18).toString("base64url");
     let organizationId: string | undefined;
 
     try {
@@ -34,8 +32,7 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
       await platformPage.getByLabel("نام نخستین شعبه").fill(branchName);
       await platformPage.getByLabel("کد شعبه").fill(`E2E${nonce.slice(0, 6).toUpperCase()}`);
       await platformPage.getByLabel("نام مدیر").fill(managerName);
-      await platformPage.getByLabel("ایمیل حساب عملیاتی").fill(managerEmail);
-      await platformPage.getByLabel("رمز اولیهٔ موقت").fill(temporaryPassword);
+      await platformPage.getByLabel("شمارهٔ همراه مدیر").fill(managerPhone);
       await platformPage.getByRole("button", { name: "ساخت سازمان، شعبه و مدیر" }).click();
       await expect(platformPage).toHaveURL(/\/platform\/organizations\/[0-9a-f-]+\?created=1/);
 
@@ -47,19 +44,23 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
       expect(created.rowCount).toBe(1);
       organizationId = created.rows[0]!.organization_id;
       const branchId = created.rows[0]!.branch_id;
-      const user = await database.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1", [managerEmail]);
+      const user = await database.query<{ id: string }>("SELECT id FROM users WHERE phone_number = $1", [managerPhone]);
       expect(user.rowCount).toBe(1);
       const userId = user.rows[0]!.id;
 
       const operationalContext = await browser.newContext();
       try {
         const page = await operationalContext.newPage();
-        await signIn(page, "/login", managerEmail, temporaryPassword);
-        await expect(page).toHaveURL(/\/app\/security\/change-password/);
-        await page.getByLabel("رمز فعلی").fill(temporaryPassword);
-        await page.getByLabel("رمز تازه، حداقل ۱۲ نویسه").fill(newPassword);
-        await page.getByLabel("تکرار رمز تازه").fill(newPassword);
-        await page.getByRole("button", { name: "تغییر رمز و ادامه" }).click();
+        await page.goto("/login");
+        await page.getByLabel("شمارهٔ همراه ثبت‌شده").fill(managerPhone);
+        await page.getByRole("button", { name: "دریافت کد ورود" }).click();
+        await expect(page.getByLabel("کد یک‌بارمصرف شش‌رقمی")).toBeVisible();
+        const verification = await waitForRow<{ value: string }>(database,
+          "SELECT value FROM user_verifications WHERE identifier = $1 AND expires_at > now() ORDER BY created_at DESC LIMIT 1",
+          [managerPhone],
+        );
+        await page.getByLabel("کد یک‌بارمصرف شش‌رقمی").fill(verification.value.split(":")[0]!);
+        await page.getByRole("button", { name: "تأیید و ورود" }).click();
         await expect(page).toHaveURL(/\/app\?organizationId=/);
 
         const validScope = `organizationId=${organizationId}&branchId=${branchId}`;
@@ -156,8 +157,8 @@ test.describe("مسیر اصلی نسخهٔ اولیه", () => {
     } finally {
       if (organizationId) {
         await database.query("UPDATE organizations SET status = 'archived', archived_at = now(), updated_at = now() WHERE id = $1", [organizationId]).catch(() => undefined);
-        await database.query("UPDATE users SET status = 'suspended', updated_at = now() WHERE lower(email) = $1", [managerEmail]).catch(() => undefined);
-        await database.query("DELETE FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE lower(email) = $1)", [managerEmail]).catch(() => undefined);
+        await database.query("UPDATE users SET status = 'suspended', updated_at = now() WHERE phone_number = $1", [managerPhone]).catch(() => undefined);
+        await database.query("DELETE FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE phone_number = $1)", [managerPhone]).catch(() => undefined);
       }
       await platformContext.close();
       await database.end();

@@ -3,7 +3,8 @@ import { defineConfig } from "@playwright/test";
 const testConfigured = Boolean(
   process.env.DATABASE_URL &&
   process.env.E2E_SUPERADMIN_EMAIL &&
-  process.env.E2E_SUPERADMIN_PASSWORD,
+  process.env.E2E_SUPERADMIN_PASSWORD &&
+  process.env.TAFRIHBAN_TEST_OTP_SINK === "1",
 );
 const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 

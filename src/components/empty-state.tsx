@@ -12,11 +12,11 @@ export function FormNotice({ searchParams }: { searchParams?: { error?: string; 
   if (searchParams?.saved) return <p className="notice notice-success" role="status">تغییر با موفقیت ثبت شد.</p>;
   const errors: Record<string, string> = {
     invalid: "اطلاعات فرم کامل یا معتبر نیست.",
+    "permission-denied": "نقش انتخاب‌شده یا محدودهٔ درخواستی خارج از اختیار شماست.",
     timezone: "منطقهٔ زمانی معتبر نیست.",
     "invalid-time": "زمان واردشده با منطقهٔ زمانی شعبه سازگار نیست.",
-    "password-required": "برای حساب تازه یک رمز موقت حداقل ۱۲ نویسه‌ای وارد کنید.",
-    "account-create-failed": "حساب ساخته نشد؛ ایمیل تکراری یا اطلاعات ورود نامعتبر است.",
-    "manager-account": "حساب مدیر مجموعه ساخته نشد؛ بررسی کنید ایمیل در حساب عملیاتی دیگری رزرو نشده باشد.",
+    "account-create-failed": "حساب ساخته یا به محدوده متصل نشد؛ شمارهٔ همراه را بررسی کنید.",
+    "manager-account": "حساب مدیر مجموعه ساخته یا متصل نشد؛ شمارهٔ همراه را بررسی کنید.",
     "could-not-save": "تغییر ثبت نشد. کد یا شناسهٔ تکراری را بررسی کنید.",
     "invalid-transition": "این جابه‌جایی وضعیت مجاز نیست یا اطلاعات تکمیل کافی نیست.",
   };

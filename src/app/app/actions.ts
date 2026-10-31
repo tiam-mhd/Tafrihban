@@ -7,7 +7,9 @@ import { z } from "zod";
 import { pool } from "@/db";
 import { localDateTimeToUtc } from "@/lib/dates";
 import { createOperationalUser, findOperationalUser, removeUnusedOperationalUser } from "@/modules/identity/accounts";
-import { assertOperationalPermission, assertOrganizationPermission, requireOperationalActor, requireOperationalScope } from "@/server/auth-guards";
+import { normalizeIranianMobile } from "@/modules/identity/iranian-phone";
+import { canAssignMemberRole, canRevokeMemberAssignment } from "@/modules/identity/member-management-policy";
+import { assertOperationalPermission, assertOrganizationPermission, hasOrganizationPermission, requireOperationalActor, requireOperationalScope } from "@/server/auth-guards";
 import { insertOperationalAudit } from "@/server/transactions";
 
 const idSchema = z.string().uuid();
@@ -21,11 +23,6 @@ function fail(path: string, code: string): never {
 function formString(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function formRaw(form: FormData, key: string): string {
-  const value = form.get(key);
-  return typeof value === "string" ? value : "";
 }
 
 export async function createBranchAction(form: FormData): Promise<void> {
@@ -117,31 +114,34 @@ export async function addMemberAction(form: FormData): Promise<void> {
   const actor = await requireOperationalActor();
   const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
   await assertOperationalPermission(scope, "member.manage");
-  await assertOperationalPermission(scope, "role.manage");
-  await assertOrganizationPermission(scope, "member.manage");
-  await assertOrganizationPermission(scope, "role.manage");
+  const canManageOrganizationMembers = await hasOrganizationPermission(scope, "member.manage");
   const parsed = z.object({
     name: z.string().min(2).max(120),
-    email: z.email().max(254),
-    password: z.string().max(128).optional().default(""),
+    phone: z.string().min(7).max(30),
     roleKey: z.string().regex(/^[a-z][a-z0-9_]{1,49}$/),
     scopeType: z.enum(["organization", "branch"]),
   }).safeParse({
     name: formString(form, "name"),
-    email: formString(form, "email"),
-    password: formRaw(form, "password"),
+    phone: formString(form, "phone"),
     roleKey: formString(form, "roleKey"),
     scopeType: formString(form, "scopeType") || "branch",
   });
   if (!parsed.success) fail("/app/members", "invalid");
 
-  const email = parsed.data.email.toLowerCase();
-  let account = await findOperationalUser(email);
+  const phone = normalizeIranianMobile(parsed.data.phone);
+  if (!phone) fail("/app/members", "invalid-phone");
+  if (!canAssignMemberRole({
+    actorCanManageOrganizationMembers: canManageOrganizationMembers,
+    roleKey: parsed.data.roleKey,
+    rolePermissionKeys: [],
+    scopeType: parsed.data.scopeType,
+  })) fail("/app/members", "permission-denied");
+
+  let account = await findOperationalUser(phone);
   let createdAccountId: string | null = null;
   if (!account) {
-    if (parsed.data.password.length < 12) fail("/app/members", "password-required");
     try {
-      const created = await createOperationalUser({ email, name: parsed.data.name, password: parsed.data.password });
+      const created = await createOperationalUser({ phone, name: parsed.data.name });
       account = { id: created.id, name: parsed.data.name };
       if (created.created) createdAccountId = created.id;
     } catch {
@@ -160,12 +160,21 @@ export async function addMemberAction(form: FormData): Promise<void> {
       [randomUUID(), account.id, scope.organizationId],
     );
     const targetMembershipId = membership.rows[0]!.id;
-    const role = await client.query<{ id: string }>(
-      `SELECT id FROM operational_roles
-        WHERE organization_id = $1 AND key = $2 AND status = 'active'`,
+    const role = await client.query<{ id: string; permission_keys: string[] | null }>(
+      `SELECT r.id, array_agg(rp.permission_key) FILTER (WHERE rp.permission_key IS NOT NULL) AS permission_keys
+         FROM operational_roles r
+         LEFT JOIN operational_role_permissions rp ON rp.role_id = r.id
+        WHERE r.organization_id = $1 AND r.key = $2 AND r.status = 'active'
+        GROUP BY r.id`,
       [scope.organizationId, parsed.data.roleKey],
     );
     if (!role.rowCount) throw new Error("role missing");
+    if (!canAssignMemberRole({
+      actorCanManageOrganizationMembers: canManageOrganizationMembers,
+      roleKey: parsed.data.roleKey,
+      rolePermissionKeys: role.rows[0]!.permission_keys ?? [],
+      scopeType: parsed.data.scopeType,
+    })) throw new Error("role exceeds member-management scope");
     const targetBranch = parsed.data.scopeType === "branch" ? scope.branchId : null;
     if (targetBranch) {
       await client.query(
@@ -206,22 +215,67 @@ export async function revokeMemberAction(form: FormData): Promise<void> {
   const actor = await requireOperationalActor();
   const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
   await assertOperationalPermission(scope, "member.manage");
-  await assertOrganizationPermission(scope, "member.manage");
+  const canManageOrganizationMembers = await hasOrganizationPermission(scope, "member.manage");
   const membershipId = formString(form, "membershipId");
   if (!idSchema.safeParse(membershipId).success || membershipId === scope.membershipId) fail("/app/members", "invalid");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const target = await client.query(
-      `UPDATE organization_memberships SET status = 'revoked'
-        WHERE id = $1 AND organization_id = $2 AND status <> 'revoked'`,
-      [membershipId, scope.organizationId],
+    const target = await client.query<{ user_id: string; has_organization_role: boolean; has_elevated_branch_role: boolean }>(
+      `SELECT om.user_id,
+              EXISTS (
+                SELECT 1 FROM membership_role_assignments a
+                 WHERE a.membership_id = om.id AND a.organization_id = om.organization_id
+                   AND a.scope_type = 'organization' AND a.branch_id IS NULL
+              ) AS has_organization_role,
+              EXISTS (
+                SELECT 1 FROM membership_role_assignments a
+                JOIN operational_roles r ON r.id = a.role_id AND r.organization_id = a.organization_id AND r.status = 'active'
+                LEFT JOIN operational_role_permissions rp ON rp.role_id = r.id
+                 WHERE a.membership_id = om.id AND a.organization_id = om.organization_id
+                   AND a.scope_type = 'branch' AND a.branch_id = $3
+                   AND (r.key = 'branch_manager' OR rp.permission_key = ANY($4::text[]))
+              ) AS has_elevated_branch_role
+         FROM organization_memberships om
+        WHERE om.id = $1 AND om.organization_id = $2 AND om.status = 'active'
+        FOR UPDATE`,
+      [membershipId, scope.organizationId, scope.branchId, ["organization.manage", "branch.manage", "member.manage", "role.manage"]],
     );
     if (!target.rowCount) throw new Error("not found");
-    await client.query("UPDATE branch_memberships SET status = 'revoked' WHERE membership_id = $1", [membershipId]);
+    if (!canRevokeMemberAssignment({
+      actorCanManageOrganizationMembers: canManageOrganizationMembers,
+      targetHasOrganizationRole: target.rows[0]!.has_organization_role,
+      targetHasElevatedBranchRole: target.rows[0]!.has_elevated_branch_role,
+    })) throw new Error("manager membership is outside branch-management scope");
+    if (canManageOrganizationMembers) {
+      await client.query(
+        "UPDATE organization_memberships SET status = 'revoked' WHERE id = $1 AND organization_id = $2",
+        [membershipId, scope.organizationId],
+      );
+      await client.query(
+        "UPDATE branch_memberships SET status = 'revoked' WHERE membership_id = $1 AND organization_id = $2",
+        [membershipId, scope.organizationId],
+      );
+      await client.query(
+        "DELETE FROM membership_role_assignments WHERE membership_id = $1 AND organization_id = $2",
+        [membershipId, scope.organizationId],
+      );
+    } else {
+      const changed = await client.query(
+        "UPDATE branch_memberships SET status = 'revoked' WHERE membership_id = $1 AND organization_id = $2 AND branch_id = $3 AND status = 'active'",
+        [membershipId, scope.organizationId, scope.branchId],
+      );
+      if (!changed.rowCount) throw new Error("branch membership is outside scope");
+      await client.query(
+        "DELETE FROM membership_role_assignments WHERE membership_id = $1 AND organization_id = $2 AND scope_type = 'branch' AND branch_id = $3",
+        [membershipId, scope.organizationId, scope.branchId],
+      );
+    }
     await insertOperationalAudit(client, {
-      actorId: actor.id, organizationId: scope.organizationId, action: "membership.revoked",
-      entityType: "organization_membership", entityId: membershipId,
+      actorId: actor.id, organizationId: scope.organizationId, branchId: canManageOrganizationMembers ? null : scope.branchId,
+      action: canManageOrganizationMembers ? "membership.revoked" : "branch_membership.revoked",
+      entityType: canManageOrganizationMembers ? "organization_membership" : "branch_membership",
+      entityId: membershipId, metadata: { targetUserId: target.rows[0]!.user_id },
     });
     await client.query("COMMIT");
   } catch {

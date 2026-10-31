@@ -35,7 +35,7 @@
 | مدیر سامانهٔ تفریح‌بان | ایجاد و مدیریت مجموعه‌ها، شعبه‌ها، حساب‌های عملیاتی و تنظیمات سامانه |
 | SUPERADMIN پلتفرم | کنترل سراسری پلتفرم و همهٔ قابلیت‌های مدیریتی، همراه با ثبت حسابرسی |
 
-کاربر عملیاتی ممکن است در یک یا چند مجموعه و شعبه عضو باشد. نقش او می‌تواند میان شعبه‌ها متفاوت باشد. حساب‌های مدیر پلتفرم در جدول‌ها و مسیر احراز هویت مجزا از حساب‌های کاربران عملیاتی نگهداری می‌شوند.
+کاربر عملیاتی ممکن است در یک یا چند مجموعه و شعبه عضو باشد. نقش او می‌تواند میان شعبه‌ها متفاوت باشد. مدیر پلتفرم مدیر مجموعه را تعریف می‌کند؛ مدیر مجموعه می‌تواند مدیر شعبه را در محدودهٔ همان شعبه بسازد و مدیر شعبه اعضای عادی محدوده را اضافه یا لغو می‌کند. کاربران عملیاتی با OTP پیامکی ParsGreen به شمارهٔ از قبل ثبت‌شده وارد می‌شوند و ثبت‌نام عمومی ندارند. حساب‌های مدیر پلتفرم در جدول‌ها و مسیر احراز هویت مجزا از حساب‌های کاربران عملیاتی نگهداری می‌شوند.
 
 ### ۴. ارزش پیشنهادی
 
@@ -49,8 +49,8 @@
 
 ### ۵. گردش کار اصلی
 
-1. SUPERADMIN با تنظیم امن اولیه وارد بخش مدیریت پلتفرم می‌شود و مجموعهٔ مشتری را می‌سازد.
-2. مدیر مجموعه، شعبه‌ها، اعضا و نقش‌ها را ثبت یا دعوت می‌کند.
+1. SUPERADMIN با تنظیم امن اولیه وارد بخش مدیریت پلتفرم می‌شود، مجموعه را می‌سازد و مدیر مجموعه را با شمارهٔ همراهش تعریف می‌کند.
+2. مدیر مجموعه شعبه‌ها را می‌سازد و مدیر شعبه را در شعبهٔ مشخص تعریف می‌کند؛ مدیر شعبه اعضای عادی مثل بازرس یا تعمیرکار را فقط در شعبهٔ خودش اضافه یا لغو می‌کند. کاربر با OTP به حساب سراسری مبتنی بر همان شماره وارد می‌شود.
 3. برای هر دستگاه پروندهٔ دیجیتال با شناسه، مشخصات، وضعیت، محل و تاریخچه ایجاد می‌شود.
 4. سامانه برای دستگاه یا فرم آن QR یکتا می‌سازد؛ QR فقط شناسهٔ عمومی و غیرحساس را حمل می‌کند.
 5. مدیر یا مسئول ایمنی، چک‌لیست نسخه‌دار و زمان‌بندی بازرسی را به دستگاه یا گروه دستگاه‌ها تخصیص می‌دهد.
@@ -64,7 +64,7 @@
 
 نسخهٔ اول باید یک محصول قابل استفاده باشد، نه فقط قالب یا صفحهٔ نمایشی. اجزای نسخهٔ اولیه:
 
-- ورود امن و نشست کاربری برای کاربران عملیاتی و مدیران پلتفرم در مسیرهای جدا.
+- ورود عملیاتی با OTP شش‌رقمی ParsGreen به شمارهٔ قبلاً provisionشده، بدون ثبت‌نام عمومی؛ ورود ایمیل/رمز و TOTP اختیاری برای مدیر پلتفرم در مسیر جدا.
 - ایجاد و مدیریت سازمان‌ها/مجموعه‌ها و شعبه‌ها.
 - فهرست سراسری کاربران عملیاتی، عضویت در مجموعه و شعبه و تخصیص نقش.
 - نقش‌ها و مجوزهای قابل‌مدیریت در محدودهٔ مجموعه یا شعبه.
@@ -150,7 +150,7 @@ Tafrihban turns this work into structured events: who did what, on which equipme
 | Tafrihban platform administrator | Create and manage organizations, branches, operational accounts, and platform configuration |
 | Platform SUPERADMIN | Control the platform and all administrative capabilities, with full audit logging |
 
-An operational user may belong to one or more organizations and branches, with different roles in different scopes. Platform administrators use separate tables and an authentication path isolated from operational user accounts.
+An operational user may belong to one or more organizations and branches, with different roles in different scopes. A platform administrator provisions the organization manager; an organization manager can add branch managers within one branch; branch managers can add or revoke ordinary members in their own scope. Operational users sign in with ParsGreen SMS OTP to a previously provisioned mobile number, with public registration disabled. Platform administrators use separate tables and an authentication path isolated from operational user accounts.
 
 ### 4. Value proposition
 
@@ -164,8 +164,8 @@ An operational user may belong to one or more organizations and branches, with d
 
 ### 5. Core workflow
 
-1. The SUPERADMIN enters through secure initial setup and creates a customer organization.
-2. The organization manager creates branches, members, and scoped roles or invitations.
+1. The SUPERADMIN enters through secure initial setup, creates a customer organization, and provisions its organization manager by mobile number.
+2. The organization manager creates branches and provisions branch managers for specific branches. Branch managers add or revoke ordinary members, such as inspectors or technicians, in their own branch. Users sign in to their global phone-based account with OTP.
 3. Each asset receives a digital record with an identifier, specifications, status, location, and history.
 4. Tafrihban generates a unique QR code. The QR carries only a non-sensitive public identifier.
 5. A manager or safety lead assigns a versioned checklist and inspection schedule to an asset or asset group.
@@ -179,7 +179,7 @@ An operational user may belong to one or more organizations and branches, with d
 
 Version one must be usable software, not only a visual shell:
 
-- Secure sign-in and sessions for operational users and platform administrators on separate routes.
+- Operational sign-in with six-digit ParsGreen SMS OTP to a previously provisioned mobile number, with public self-registration disabled; email/password and optional TOTP for platform admins on a separate route.
 - Organization and branch creation and management.
 - One operational users table, with organization/branch memberships and scoped role assignments.
 - Manageable roles and permissions at organization or branch scope.

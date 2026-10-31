@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/vazirmatn";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 
@@ -7,6 +8,10 @@ export const metadata: Metadata = {
   description: "پروندهٔ تجهیزات، بازرسی‌های برنامه‌ریزی‌شده و پیگیری اقدامات اصلاحی.",
   applicationName: "تفریح‌بان",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/Light-Logo.png", type: "image/png", sizes: "1254x1254" }],
+    apple: [{ url: "/Light-Logo.png", type: "image/png", sizes: "1254x1254" }],
+  },
   appleWebApp: { capable: true, title: "تفریح‌بان", statusBarStyle: "default" },
 };
 

@@ -12,7 +12,7 @@
    npm.cmd ci
    ```
 
-2. `.env.example` را به `.env.local` کپی کنید و `DATABASE_URL`، سه secret مستقل، و نشانی `BETTER_AUTH_URL` را با مقادیر محلی و امن پر کنید. secretهای واقعی را commit نکنید. برای PostgreSQL یک پایگاه خالی بسازید.
+2. `.env.example` را به `.env.local` کپی کنید و `DATABASE_URL`، secretهای مستقل، `PARSGREEN_API_TOKEN` و نشانی `BETTER_AUTH_URL` را با مقادیر محلی و امن پر کنید. secretهای واقعی را commit نکنید. برای PostgreSQL یک پایگاه خالی بسازید. توکن ParsGreen فقط در سرور استفاده می‌شود و نباید `NEXT_PUBLIC_` داشته باشد.
 3. schema را بسازید و مدیر کل پلتفرم را با مشخصات خود اپراتور ایجاد کنید:
 
    ```powershell
@@ -28,19 +28,21 @@
    npm.cmd run dev
    ```
 
-   ورود پلتفرم در `/platform/login` است. از `/platform/organizations/new` سازمان، شعبه و مدیر عملیاتی نخست را بسازید. رمز موقت مدیر را بیرون از سامانه و از راه امن تحویل دهید. ورود عملیاتی از `/login` انجام می‌شود.
+   ورود مدیر پلتفرم در `/platform/login` است و با ایمیل/رمز و گارد مستقل ادامه دارد. مدیر پلتفرم از `/platform/organizations/new` سازمان، شعبهٔ اول و مدیر مجموعه را با شمارهٔ همراهش تعریف می‌کند. مدیر مجموعه از بخش «اعضا» مدیر شعبه را در محدودهٔ یک شعبه می‌افزاید؛ مدیر شعبه می‌تواند بازرس و تعمیرکار عادی همان شعبه را اضافه یا لغو کند. حساب موجود با همان شماره به سازمان تازه می‌پیوندد و هویت جداگانه نمی‌سازد. کاربران عملیاتی فقط با OTP پارس‌گرین در `/login` وارد می‌شوند؛ ثبت‌نام عمومی وجود ندارد.
+
+   متغیر ارسال واقعی پیامک `PARSGREEN_API_TOKEN` است. اگر توکن تنظیم نشده باشد یا درگاه خطا دهد، پیامک ارسال نمی‌شود و رابط ورود پاسخ عمومی نشان می‌دهد. برای E2E محلی، `TAFRIHBAN_TEST_OTP_SINK=1` را فقط در محیط development فعال کنید؛ sink پیامکی نمی‌فرستد و آزمون کد را از verification محلی می‌خواند. این تنظیم در production نادیده گرفته می‌شود.
 
 ### دادهٔ آزمایشی توسعه
 
-Seed فقط با `NODE_ENV=development` و `DEV_FIXTURE_PASSWORD` اپراتور اجرا می‌شود. این fixture ساختگی است و در production در دسترس نیست.
+Seed فقط با `NODE_ENV=development` و `DEV_FIXTURE_PHONE` که اپراتور فراهم می‌کند اجرا می‌شود. این fixture ساختگی است و در production در دسترس نیست؛ ایجاد آن پیامک نمی‌فرستد.
 
 ```powershell
 $env:NODE_ENV = "development"
-$env:DEV_FIXTURE_PASSWORD = "یک-رمز-محلی-تصادفی-۱۲-نویسه-یا-بیشتر"
+$env:DEV_FIXTURE_PHONE = "شماره-همراه-تحت-کنترل-اپراتور"
 npm.cmd run db:seed:dev
 ```
 
-حساب آزمایشی `inspector@example.test` است. رمز را فقط برای محیط محلی نگه دارید.
+پس از seed، با شمارهٔ واردشده و توکن ParsGreen وارد شوید. برای آزمون مرورگری از sink محلی استفاده کنید؛ آن را برای ورود روزمره فعال نکنید.
 
 ## فرمان‌های کنترل کیفیت
 
@@ -51,7 +53,7 @@ npm.cmd test
 npm.cmd run build
 ```
 
-آزمون مرز دیتابیس فقط وقتی `DATABASE_URL` باشد اجرا می‌شود. برای مسیر E2E کامل، migration را اجرا کنید، یک SUPERADMIN bootstrap و رمز آن را پس از ورود نخست تغییر دهید، سپس ایمیل/رمز فعلی آن را در `E2E_SUPERADMIN_EMAIL` و `E2E_SUPERADMIN_PASSWORD` قرار دهید. حساب آزمایش باید TOTP فعال نداشته باشد. Chromium را یک‌بار با `npm.cmd exec playwright install chromium` نصب کنید و سپس اجرا کنید:
+آزمون مرز دیتابیس فقط وقتی `DATABASE_URL` باشد اجرا می‌شود. برای مسیر E2E کامل، migration را اجرا کنید، یک SUPERADMIN bootstrap و رمز آن را پس از ورود نخست تغییر دهید، سپس ایمیل/رمز فعلی آن را در `E2E_SUPERADMIN_EMAIL` و `E2E_SUPERADMIN_PASSWORD` قرار دهید. حساب آزمایش باید TOTP فعال نداشته باشد. `TAFRIHBAN_TEST_OTP_SINK=1` را در محیط سرور توسعه تنظیم کنید تا آزمون OTP پیامکی نفرستد. Chromium را یک‌بار با `npm.cmd exec playwright install chromium` نصب کنید و سپس اجرا کنید:
 
 ```powershell
 npm.cmd run e2e
@@ -67,7 +69,7 @@ npm.cmd run e2e
 - پیاده‌سازی ذخیره‌سازی خصوصی فعلی برای میزبان واحد/محلی است. قرارداد provider جداست، اما object storage، اسکن بدافزار، retention policy و استقرار چندمیزبانه هنوز تنظیم نشده‌اند. در استقرار باید پوشهٔ خصوصی روی volume پایدار و خارج از web root باشد.
 - همگام‌سازی آفلاین اکنون برای بازرسی، پاسخ‌ها و عکس‌هاست؛ صف هنگام foreground/retry اجرا می‌شود و پاسخ tenant وارد cache مشترک service worker نمی‌شود.
 - تکمیل work order مدرک متنی الزامی دارد؛ پیوست عکس برای خود work order هنوز در دسترس نیست.
-- بازیابی حساب توسط مدیر مجاز پلتفرم رمز موقت می‌سازد؛ تحویل امن خارج از سامانه بر عهدهٔ اپراتور است. SMTP، پیامک و پیوند خودکار بازیابی پیاده‌سازی نشده‌اند.
+- ورود OTP عملیاتی به ParsGreen وصل است؛ توکن واقعی و تست live پیامک در این مخزن/محیط ارائه نشده‌اند. بازیابی پلتفرم همچنان با رویهٔ اپراتوری انجام می‌شود و ارسال خودکار ایمیل/پیوند بازیابی ندارد.
 - TOTP برای مدیر پلتفرم پشتیبانی می‌شود؛ فعال‌سازی و الزام سازمانی آن باید در رویهٔ استقرار کنترل شود.
 - UI فعلی فارسی و RTL است؛ locale و فیلد کاربر برای آمادگی انگلیسی وجود دارد، اما ترجمهٔ کامل انگلیسی آماده نیست.
 - PostgreSQL RLS در این نسخه فعال نشده است؛ دفاع کنونی شامل scope سمت‌سرور، قیدهای مرکب و آزمون مرز tenant است. RLS و آزمون‌های بازیابی پشتیبان در hardening استقرار باقی‌اند.
@@ -79,3 +81,4 @@ npm.cmd run e2e
 - [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md): برنامه، فرض‌ها، تصمیم‌ها و محدودیت‌های این نسخه.
 - [`Tafrihban_Technical_Engineering_Spec.md`](Tafrihban_Technical_Engineering_Spec.md): مشخصات فنی همگام‌شده با MVP.
 - [`ADR-0001-modular-monolith.md`](ADR-0001-modular-monolith.md): تصمیم معماری و جداسازی هویت‌ها.
+- [`ADR-0002-operational-phone-otp.md`](ADR-0002-operational-phone-otp.md): ورود عملیاتی با ParsGreen OTP و سلسله‌مراتب provisioning حساب‌ها.

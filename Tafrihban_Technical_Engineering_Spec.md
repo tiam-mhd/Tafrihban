@@ -128,7 +128,7 @@
 |---|---|
 | organizations | id، name، slug، status، timezone، created_at، archived_at |
 | branches | id، organization_id، name، code، address، timezone اختیاری، status؛ unique روی organization_id + code |
-| users | id، نام نمایشی، ایمیل/شمارهٔ نرمال‌شده، وضعیت، locale، created_at؛ هویت عملیاتی یکتا در کل سامانه |
+| users | id، نام نمایشی، email داخلی یکتا، شمارهٔ همراه ایران در E.164 با unique index، phone_number_verified، وضعیت، locale، created_at؛ هویت عملیاتی یکتا در کل سامانه |
 | organization_memberships | id، user_id، organization_id، status، invited_at، joined_at؛ unique user_id + organization_id |
 | branch_memberships | membership_id، branch_id، status؛ کنترل شود که branch متعلق به همان organization عضویت است |
 | operational_roles | id، organization_id، name، description، is_system_role؛ نقش پایهٔ پلتفرم فقط اگر نیاز دامنه دارد |
@@ -245,11 +245,15 @@
 - ارسال SMS با provider سمت سرور و adapter انجام شود؛ مرورگر قرار نیست بی‌صدا SMS بفرستد. بازکردن sms: فقط fallback برای composer بومی است، نه ارسال خودکار.
 - email/SMS/push در صف delivery با idempotency، retry و گزارش خطا اداره شود.
 
+در تصمیم MVP این سند، ورود کاربران عملیاتی با Better Auth Phone Number OTP و ParsGreen انجام می‌شود. `PARSGREEN_API_TOKEN` فقط سمت سرور است؛ کد OTP را Better Auth می‌سازد و provider فقط شماره و کد را می‌فرستد. ثبت‌نام عمومی خاموش است و provisioning عضویت را مدیر محدوده انجام می‌دهد. مدیر پلتفرم همچنان از احراز هویت جداگانهٔ ایمیل/رمز و TOTP اختیاری استفاده می‌کند.
+
 ## ۷. UI/UX و طراحی تجربه
 
 ### اصول تجربه
 
 - فارسی و RTL از ابتدا، نه وصلهٔ بعدی. تمام فاصله‌گذاری، جدول، آیکون جهت‌دار، breadcrumb و فرم با RTL بررسی شود.
+- Vazirmatn Variable از بستهٔ local و lockfileدار بارگذاری شود؛ فونت runtime به CDN وابسته نباشد و fallbackهای سیستم برای پوشش خطای بارگذاری باقی بمانند.
+- از `public/Light-Logo.png` روی سطح روشن و `public/Dark-Logo.png` روی سطح تیره استفاده شود؛ تصویر لوگو به‌صورت local asset ارائه شود.
 - موبایل‌محور برای کار کنار دستگاه، دسکتاپ‌محور برای مدیریت و گزارش.
 - شروع با کار اصلی: امروز چه بازرسی، عیب و کاری نیاز به اقدام دارد؟
 - یک فرم بازرسی باید کوتاه، قابل‌خواندن و مناسب کار با یک دست و دستکش سبک باشد.
@@ -370,6 +374,9 @@
 - دسترسی دوربین در MDN: https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
 - Service Worker در MDN: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 - Row Security در PostgreSQL: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
+- Better Auth Phone Number plugin: https://better-auth.com/docs/plugins/phone-number
+- ParsGreen SDK API reference: https://www.nuget.org/packages/PARSGREEN.CORE
+- Next.js font optimization: https://nextjs.org/docs/app/getting-started/fonts
 - مرورگرها و نسخه‌های هدف باید پیش از تصمیم نهایی PWA و push در ماتریس سازگاری ثبت شوند؛ این رفتارها وابسته به مرورگر، دستگاه، HTTPS و مجوز کاربر هستند.
 
 ## ۱۴. نمای اجراشدهٔ MVP
@@ -378,11 +385,15 @@
 
 - برنامه به‌صورت modular monolith در Next.js App Router اجرا می‌شود. PostgreSQL 15+ با migration checksumدار استفاده می‌شود؛ تغییر migration اعمال‌شده باید migration تازه باشد.
 - Better Auth در دو پیکربندی مستقل برای کاربران عملیاتی و مدیران پلتفرم به کار رفته است. جدول‌های کاربر، session، account و verification و cookie prefix آن‌ها جداست. مدیر پلتفرم می‌تواند TOTP فعال کند؛ الزام سیاستی MFA به استقرار واگذار شده است.
+- ورود عملیاتی فقط با شمارهٔ همراه ثبت‌شده و OTP شش‌رقمی Better Auth انجام می‌شود. provider سمت سرور ParsGreen و متغیر `PARSGREEN_API_TOKEN` را مصرف می‌کند؛ امکان signup عمومی یا رمز عملیاتی فعال نیست. شمارهٔ همراه با migration افزوده‌شده E.164/یکتاست. sink بدون ارسال SMS فقط برای E2E محلی فعال می‌شود.
+- مدیر پلتفرم، مدیر مجموعه را هنگام ایجاد سازمان با شمارهٔ همراه provision می‌کند؛ مدیر مجموعه می‌تواند مدیر شعبه را فقط برای یک شعبه تعریف کند و مدیر شعبه فقط نقش‌های عادی همان شعبه را تخصیص می‌دهد. تعلیق حساب سراسری فقط از پنل مجاز پلتفرم انجام می‌شود و نشست‌ها را revoke می‌کند.
+- لوگوهای مالک محصول در همهٔ shellهای عمومی، عملیاتی و پلتفرم مصرف می‌شوند. Vazirmatn Variable از dependency محلی package و با fallbackهای CSS ارائه می‌شود.
 - scope عملیاتی از session و membership پایگاه داده حل می‌شود. permission، membership و branch membership پیش از mutation/query کنترل می‌شوند و FKهای مرکب اتصال بین سازمان/شعبه را محدود می‌کنند. PostgreSQL RLS در این پیاده‌سازی فعال نیست.
 - SUPERADMIN با فرمان `npm run platform:bootstrap` و متغیرهای اپراتور ساخته می‌شود. نقش دارای `grants_all_permissions` است و چک‌کردن wildcard در permission helper انجام می‌شود.
 - آفلاین فقط بازرسی‌ها و عکس همراه آن‌ها را در IndexedDB نگه می‌دارد. شناسهٔ event یکتا، schema version، زمان دستگاه و زمان دریافت سرور وجود دارد. ثبت محلی تا پاسخ server صریحاً synced نمایش داده نمی‌شود. service worker پاسخ tenant را cache نمی‌کند.
 - فایل خصوصی با provider فایل‌سیستم محلی و توکن دسترسی پنج‌دقیقه‌ای ارائه می‌شود. این adapter برای چند replica مناسب نیست تا provider پایدار object storage نصب شود.
 - خروجی CSV scoped و auditشده است. PDF، پیام‌رسانی بازیابی رمز، ارسال اعلان، ترجمهٔ کامل انگلیسی، sync background، RLS، و پیوست تصویر work order در backlog می‌مانند.
+- delivery زندهٔ SMS به اعتبار ParsGreen نیاز دارد. provider با fake fetch آزموده می‌شود؛ ارسال پیامک واقعی در CI انجام نمی‌شود. بازیابی مدیران پلتفرم همچنان operator-mediated است.
 - work order با مسئول، اولویت، موعد، وضعیت‌های محدود و یادداشت تکمیل دنبال می‌شود؛ تکمیل یا بستن workflow هیچ ادعای ایمنی یا اجازهٔ بهره‌برداری ایجاد نمی‌کند.
 - پوشش خودکار شامل testهای واحد و DB boundary و یک مسیر Playwright از ساخت سازمان تا بستن work order است؛ migration از دیتابیس تازه، bootstrap و آزمون DB/E2E فقط زمانی تأیید می‌شوند که PostgreSQL قابل‌نوشتن و secretهای اپراتور حاضر باشند.
 

@@ -8,9 +8,9 @@ loadEnvConfig(process.cwd());
 if (process.env.NODE_ENV !== "development") {
   throw new Error("Development fixtures are disabled unless NODE_ENV=development.");
 }
-const fixturePassword = process.env.DEV_FIXTURE_PASSWORD;
-if (!fixturePassword || fixturePassword.length < 12) {
-  throw new Error("Set DEV_FIXTURE_PASSWORD (12+ characters) to create the local fixture account.");
+const fixturePhone = process.env.DEV_FIXTURE_PHONE;
+if (!fixturePhone) {
+  throw new Error("Set DEV_FIXTURE_PHONE to an operator-controlled Iranian mobile number to create the local fixture account.");
 }
 
 const [{ pool }, { createOperationalUser }] = await Promise.all([
@@ -19,8 +19,8 @@ const [{ pool }, { createOperationalUser }] = await Promise.all([
 ]);
 
 try {
-  const email = "inspector@example.test";
-  const account = await createOperationalUser({ email, name: "بازرس آزمایشی", password: fixturePassword });
+  const phone = fixturePhone;
+  const account = await createOperationalUser({ phone, name: "بازرس آزمایشی" });
   const existing = await pool.query<{ id: string }>("SELECT id FROM organizations WHERE slug = 'fixture-park'");
   if (existing.rowCount) {
     console.info("Development fixture already exists; no data was changed.");
@@ -63,7 +63,7 @@ try {
       );
       await client.query("COMMIT");
       console.info("Created fake development organization, branch and inspector account.");
-      console.info(`Sign in with ${email} and the operator-provided DEV_FIXTURE_PASSWORD.`);
+      console.info(`Sign in with ${phone} using the configured operational OTP provider.`);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

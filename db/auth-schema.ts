@@ -18,6 +18,8 @@ export const users = pgTable(
     name: text("name").notNull(),
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
+    phoneNumber: text("phone_number").unique(),
+    phoneNumberVerified: boolean("phone_number_verified").notNull().default(false),
     image: text("image"),
     status: text("status").notNull().default("active"),
     locale: text("locale").notNull().default("fa"),

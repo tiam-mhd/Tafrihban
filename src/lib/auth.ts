@@ -2,8 +2,11 @@ import "server-only";
 
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { phoneNumber } from "better-auth/plugins";
 import { db } from "@/db";
 import { authBaseUrl, isProduction, requiredEnv } from "@/lib/env";
+import { isIranianE164 } from "@/modules/identity/iranian-phone";
+import { deliverOperationalOtp } from "@/modules/identity/operational-otp";
 import { userAccounts, userSessions, userVerifications, users } from "../../db/auth-schema";
 
 const operationalAuthSchema = {
@@ -45,17 +48,24 @@ export const operationalAuth = betterAuth({
   account: { modelName: "user_accounts" },
   verification: { modelName: "user_verifications" },
   emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-    maxPasswordLength: 128,
+    enabled: false,
     autoSignIn: false,
-    revokeSessionsOnPasswordReset: true,
   },
+  plugins: [
+    phoneNumber({
+      otpLength: 6,
+      expiresIn: 5 * 60,
+      allowedAttempts: 5,
+      requireVerification: true,
+      phoneNumberValidator: isIranianE164,
+      sendOTP: ({ phoneNumber, code }) => deliverOperationalOtp(phoneNumber, code),
+    }),
+  ],
   rateLimit: {
     enabled: true,
     customRules: {
-      "/sign-in/email": { window: 60, max: 8 },
-      "/sign-up/email": { window: 60, max: 4 },
+      "/phone-number/send-otp": { window: 60, max: 4 },
+      "/phone-number/verify": { window: 60, max: 8 },
     },
   },
   advanced: {

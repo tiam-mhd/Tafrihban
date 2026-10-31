@@ -10,7 +10,7 @@ export default async function NewOrganizationPage({ searchParams }: { searchPara
   const allowed = await hasPlatformPermission(actor, "organization.manage");
   return <PlatformShell title="ساخت سازمان و مدیر اولیه" actorName={actor.name} actorId={actor.id}>
     {!allowed ? <AccessDenied /> : <>
-      <p className="lede">سازمان، نخستین شعبه، عضویت مدیر مشتری و نقش مدیر مجموعه به‌صورت تراکنشی ثبت می‌شوند. حساب عملیاتی در جدول کاربران سراسری می‌ماند.</p>
+      <p className="lede">سازمان، نخستین شعبه، عضویت مدیر مشتری و نقش مدیر مجموعه به‌صورت تراکنشی ثبت می‌شوند. حساب عملیاتی با شمارهٔ همراه به‌صورت سراسری ساخته می‌شود.</p>
       <FormNotice searchParams={query} />
       <form action={createOrganizationAction} className="panel form-stack">
         <div className="section-heading"><div><h2>مجموعه و شعبه</h2><p>کد و نشانی در محدودهٔ همین سازمان یکتا هستند.</p></div></div>
@@ -21,11 +21,10 @@ export default async function NewOrganizationPage({ searchParams }: { searchPara
           <label className="field-label">کد شعبه<input name="branchCode" required minLength={2} maxLength={20} dir="ltr" /></label>
           <label className="field-label span-all">منطقهٔ زمانی<input name="organizationTimezone" defaultValue="Asia/Tehran" required /></label>
         </div>
-        <div className="section-heading"><div><h2>مدیر مشتری</h2><p>رمز موقت را خارج از سامانه با روش امن به مدیر تحویل دهید.</p></div></div>
+        <div className="section-heading"><div><h2>مدیر مجموعه</h2><p>حساب عملیاتی با شمارهٔ همراه سراسری ساخته یا به این مجموعه متصل می‌شود.</p></div></div>
         <div className="form-grid">
           <label className="field-label">نام مدیر<input name="managerName" required minLength={2} maxLength={120} /></label>
-          <label className="field-label">ایمیل حساب عملیاتی<input name="managerEmail" type="email" required maxLength={254} dir="ltr" /></label>
-          <label className="field-label span-all">رمز اولیهٔ موقت<input name="managerPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password" /><small>در گزارش یا پیام ثبت نمی‌شود. مدیر پس از نخستین ورود باید رمز را تغییر دهد.</small></label>
+          <label className="field-label span-all">شمارهٔ همراه مدیر<input name="managerPhone" type="tel" required minLength={7} maxLength={30} inputMode="tel" autoComplete="tel" dir="ltr" placeholder="09..." /><small>مدیر مجموعه با کد یک‌بارمصرف ارسالی به این شماره وارد می‌شود.</small></label>
         </div>
         <div className="form-actions"><button className="button button-primary" type="submit">ساخت سازمان، شعبه و مدیر</button><Link className="button button-secondary" href="/platform/organizations">بازگشت</Link></div>
       </form>
