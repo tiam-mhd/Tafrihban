@@ -15,13 +15,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   if (!(await hasOperationalPermission(scope, "dashboard.read"))) return <OperationalShell scope={scope} title="نمای امروز"><EmptyState title="دسترسی لازم وجود ندارد">برای دیدن اطلاعات این شعبه، از مدیر مجموعه بخواهید نقش مناسب را به عضویت شما بدهد.</EmptyState></OperationalShell>;
   const [equipment, overdue, defects, workOrders, dueTasks, recent] = await Promise.all([
     pool.query<{ count: string }>("SELECT count(*)::text AS count FROM equipment WHERE organization_id = $1 AND branch_id = $2 AND status <> 'archived'", [scope.organizationId, scope.branchId]),
-    pool.query<{ count: string }>("SELECT count(*)::text AS count FROM inspection_schedules WHERE organization_id = $1 AND branch_id = $2 AND is_active AND next_due_at < now()", [scope.organizationId, scope.branchId]),
+    pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM inspection_schedules s
+        JOIN equipment e ON e.id = s.equipment_id AND e.organization_id = s.organization_id AND e.branch_id = s.branch_id
+       WHERE s.organization_id = $1 AND s.branch_id = $2 AND s.is_active AND s.next_due_at < now() AND e.status <> 'archived'`, [scope.organizationId, scope.branchId]),
     pool.query<{ count: string }>("SELECT count(*)::text AS count FROM defects WHERE organization_id = $1 AND branch_id = $2 AND status IN ('open', 'in_progress')", [scope.organizationId, scope.branchId]),
     pool.query<{ count: string }>("SELECT count(*)::text AS count FROM work_orders WHERE organization_id = $1 AND branch_id = $2 AND status NOT IN ('closed', 'completed')", [scope.organizationId, scope.branchId]),
     pool.query<{ id: string; name: string; asset_code: string; next_due_at: Date }>(
       `SELECT s.id, e.name, e.asset_code, s.next_due_at FROM inspection_schedules s
-         JOIN equipment e ON e.id = s.equipment_id AND e.organization_id = s.organization_id
-        WHERE s.organization_id = $1 AND s.branch_id = $2 AND s.is_active
+         JOIN equipment e ON e.id = s.equipment_id AND e.organization_id = s.organization_id AND e.branch_id = s.branch_id
+        WHERE s.organization_id = $1 AND s.branch_id = $2 AND s.is_active AND e.status <> 'archived'
         ORDER BY s.next_due_at ASC LIMIT 5`, [scope.organizationId, scope.branchId]),
     pool.query<{ action: string; entity_type: string; created_at: Date }>(
       `SELECT action, entity_type, created_at FROM audit_events
@@ -50,7 +53,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
 }
 
 function humanAction(action: string): string {
-  const labels: Record<string, string> = { "inspection.submitted": "بازرسی ثبت شد", "defect.created_from_inspection": "عیب از بازرسی ایجاد شد", "work_order.created": "کار تعمیراتی ساخته شد", "work_order.completed": "کار تکمیل شد", "work_order.closed": "کار بسته شد", "equipment.created": "تجهیز ثبت شد", "equipment.status_changed": "وضعیت تجهیز تغییر کرد" };
+  const labels: Record<string, string> = { "inspection.submitted": "بازرسی ثبت شد", "defect.created_from_inspection": "عیب از بازرسی ایجاد شد", "work_order.created": "کار تعمیراتی ساخته شد", "work_order.completed": "کار تکمیل شد", "work_order.closed": "کار بسته شد", "equipment.created": "تجهیز ثبت شد", "equipment.status_changed": "وضعیت تجهیز تغییر کرد", "equipment.archived": "پروندهٔ تجهیز بایگانی شد", "equipment.restored": "پروندهٔ تجهیز بازیابی شد" };
   return labels[action] || "عملیات ثبت‌شده";
 }
 

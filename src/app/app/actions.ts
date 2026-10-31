@@ -389,7 +389,7 @@ export async function createCategoryAction(form: FormData): Promise<void> {
   await assertOrganizationPermission(scope, "equipment.manage");
   const parsed = z.object({ name: z.string().min(2).max(80), description: z.string().max(300).optional().default("") })
     .safeParse({ name: formString(form, "name"), description: formString(form, "description") });
-  if (!parsed.success) fail("/app/equipment", "invalid");
+  if (!parsed.success) fail("/app/equipment/categories", "invalid");
   const id = randomUUID();
   const client = await pool.connect();
   try {
@@ -402,12 +402,13 @@ export async function createCategoryAction(form: FormData): Promise<void> {
     await client.query("COMMIT");
   } catch {
     await client.query("ROLLBACK");
-    fail("/app/equipment", "could-not-save");
+    fail("/app/equipment/categories", "could-not-save");
   } finally {
     client.release();
   }
   revalidatePath("/app/equipment");
-  redirect(`/app/equipment${queryFor(scope)}&saved=1`);
+  revalidatePath("/app/equipment/categories");
+  redirect(`/app/equipment/categories${queryFor(scope)}&saved=1`);
 }
 
 export async function updateCategoryAction(form: FormData): Promise<void> {
@@ -418,7 +419,7 @@ export async function updateCategoryAction(form: FormData): Promise<void> {
   const categoryId = formString(form, "categoryId");
   const parsed = z.object({ name: z.string().min(2).max(80), description: z.string().max(300).default("") })
     .safeParse({ name: formString(form, "name"), description: formString(form, "description") });
-  if (!idSchema.safeParse(categoryId).success || !parsed.success) fail("/app/equipment", "invalid");
+  if (!idSchema.safeParse(categoryId).success || !parsed.success) fail("/app/equipment/categories", "invalid");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -426,9 +427,66 @@ export async function updateCategoryAction(form: FormData): Promise<void> {
     if (!changed.rowCount) throw new Error("category not found");
     await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment_category.updated", entityType: "equipment_category", entityId: categoryId });
     await client.query("COMMIT");
-  } catch { await client.query("ROLLBACK"); fail("/app/equipment", "could-not-save"); } finally { client.release(); }
+  } catch { await client.query("ROLLBACK"); fail("/app/equipment/categories", "could-not-save"); } finally { client.release(); }
   revalidatePath("/app/equipment");
-  redirect(`/app/equipment${queryFor(scope)}&saved=1`);
+  revalidatePath("/app/equipment/categories");
+  redirect(`/app/equipment/categories${queryFor(scope)}&saved=1`);
+}
+
+export async function archiveEquipmentCategoryAction(form: FormData): Promise<void> {
+  const actor = await requireOperationalActor();
+  const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
+  await assertOperationalPermission(scope, "equipment.manage");
+  await assertOrganizationPermission(scope, "equipment.manage");
+  const categoryId = formString(form, "categoryId");
+  if (!idSchema.safeParse(categoryId).success) fail("/app/equipment/categories", "invalid");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const category = await client.query<{ status: string }>(
+      "SELECT status FROM equipment_categories WHERE id = $1 AND organization_id = $2 FOR UPDATE",
+      [categoryId, scope.organizationId],
+    );
+    if (!category.rowCount || category.rows[0]!.status !== "active") throw new Error("category not active");
+    const linked = await client.query<{ equipment_count: number }>(
+      "SELECT count(*)::int AS equipment_count FROM equipment WHERE organization_id = $1 AND category_id = $2",
+      [scope.organizationId, categoryId],
+    );
+    await client.query("UPDATE equipment_categories SET status = 'archived', archived_at = now() WHERE id = $1 AND organization_id = $2", [categoryId, scope.organizationId]);
+    await insertOperationalAudit(client, {
+      actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId,
+      action: "equipment_category.archived", entityType: "equipment_category", entityId: categoryId,
+      metadata: { linkedEquipmentCount: linked.rows[0]?.equipment_count ?? 0 },
+    });
+    await client.query("COMMIT");
+  } catch { await client.query("ROLLBACK"); fail("/app/equipment/categories", "could-not-save"); } finally { client.release(); }
+  revalidatePath("/app/equipment");
+  revalidatePath("/app/equipment/categories");
+  redirect(`/app/equipment/categories${queryFor(scope)}&saved=1`);
+}
+
+export async function restoreEquipmentCategoryAction(form: FormData): Promise<void> {
+  const actor = await requireOperationalActor();
+  const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
+  await assertOperationalPermission(scope, "equipment.manage");
+  await assertOrganizationPermission(scope, "equipment.manage");
+  const categoryId = formString(form, "categoryId");
+  if (!idSchema.safeParse(categoryId).success) fail("/app/equipment/categories", "invalid");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const changed = await client.query(
+      `UPDATE equipment_categories SET status = 'active', archived_at = NULL
+        WHERE id = $1 AND organization_id = $2 AND status = 'archived'`,
+      [categoryId, scope.organizationId],
+    );
+    if (!changed.rowCount) throw new Error("archived category not found");
+    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment_category.restored", entityType: "equipment_category", entityId: categoryId });
+    await client.query("COMMIT");
+  } catch { await client.query("ROLLBACK"); fail("/app/equipment/categories", "could-not-save"); } finally { client.release(); }
+  revalidatePath("/app/equipment");
+  revalidatePath("/app/equipment/categories");
+  redirect(`/app/equipment/categories${queryFor(scope)}&saved=1`);
 }
 
 export async function createEquipmentAction(form: FormData): Promise<void> {
@@ -451,6 +509,13 @@ export async function createEquipmentAction(form: FormData): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    if (parsed.data.categoryId) {
+      const category = await client.query(
+        "SELECT id FROM equipment_categories WHERE id = $1 AND organization_id = $2 AND status = 'active' FOR KEY SHARE",
+        [parsed.data.categoryId, scope.organizationId],
+      );
+      if (!category.rowCount) throw new Error("category not active in this organization");
+    }
     await client.query(
       `INSERT INTO equipment (id, organization_id, branch_id, category_id, public_qr_id, asset_code, name,
                               manufacturer, model, serial_number, location, created_by)
@@ -482,20 +547,42 @@ export async function updateEquipmentAction(form: FormData): Promise<void> {
   const equipmentId = formString(form, "equipmentId");
   const parsed = z.object({
     name: z.string().min(2).max(120), categoryId: z.union([z.literal(""), z.string().uuid()]).default(""),
+    status: z.enum(["active", "inactive", "maintenance"]),
     manufacturer: z.string().max(100).default(""), model: z.string().max(100).default(""),
     serialNumber: z.string().max(100).default(""), location: z.string().max(200).default(""),
-  }).safeParse({ name: formString(form, "name"), categoryId: formString(form, "categoryId"), manufacturer: formString(form, "manufacturer"), model: formString(form, "model"), serialNumber: formString(form, "serialNumber"), location: formString(form, "location") });
+  }).safeParse({ name: formString(form, "name"), categoryId: formString(form, "categoryId"), status: formString(form, "status"), manufacturer: formString(form, "manufacturer"), model: formString(form, "model"), serialNumber: formString(form, "serialNumber"), location: formString(form, "location") });
   if (!idSchema.safeParse(equipmentId).success || !parsed.success) fail("/app/equipment", "invalid");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const current = await client.query<{ status: string; category_id: string | null }>(
+      "SELECT status, category_id FROM equipment WHERE id = $1 AND organization_id = $2 AND branch_id = $3 FOR UPDATE",
+      [equipmentId, scope.organizationId, scope.branchId],
+    );
+    if (!current.rowCount || current.rows[0]!.status === "archived") throw new Error("equipment not editable");
+    if (parsed.data.categoryId) {
+      const category = await client.query(
+        `SELECT id FROM equipment_categories c
+          WHERE c.id = $1 AND c.organization_id = $2 AND (c.status = 'active' OR c.id = $3)
+          FOR KEY SHARE OF c`,
+        [parsed.data.categoryId, scope.organizationId, current.rows[0]!.category_id],
+      );
+      if (!category.rowCount) throw new Error("category not active in this organization");
+    }
     const changed = await client.query(
       `UPDATE equipment SET name = $1, category_id = NULLIF($2, ''), manufacturer = NULLIF($3, ''), model = NULLIF($4, ''),
-         serial_number = NULLIF($5, ''), location = NULLIF($6, ''), updated_at = now()
-        WHERE id = $7 AND organization_id = $8 AND branch_id = $9`,
-      [parsed.data.name, parsed.data.categoryId, parsed.data.manufacturer, parsed.data.model, parsed.data.serialNumber, parsed.data.location, equipmentId, scope.organizationId, scope.branchId]);
+         serial_number = NULLIF($5, ''), location = NULLIF($6, ''), status = $7, updated_at = now()
+        WHERE id = $8 AND organization_id = $9 AND branch_id = $10`,
+      [parsed.data.name, parsed.data.categoryId, parsed.data.manufacturer, parsed.data.model, parsed.data.serialNumber, parsed.data.location, parsed.data.status, equipmentId, scope.organizationId, scope.branchId]);
     if (!changed.rowCount) throw new Error("equipment not found");
-    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment.updated", entityType: "equipment", entityId: equipmentId });
+    if (current.rows[0]!.status !== parsed.data.status) {
+      await client.query(
+        `INSERT INTO equipment_status_events (id, organization_id, branch_id, equipment_id, previous_status, new_status, note, actor_user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'وضعیت از پنجرهٔ ویرایش تغییر کرد', $7)`,
+        [randomUUID(), scope.organizationId, scope.branchId, equipmentId, current.rows[0]!.status, parsed.data.status, actor.id],
+      );
+    }
+    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment.updated", entityType: "equipment", entityId: equipmentId, metadata: { statusChanged: current.rows[0]!.status !== parsed.data.status } });
     await client.query("COMMIT");
   } catch { await client.query("ROLLBACK"); fail("/app/equipment", "could-not-save"); } finally { client.release(); }
   revalidatePath("/app/equipment");
@@ -503,14 +590,13 @@ export async function updateEquipmentAction(form: FormData): Promise<void> {
   redirect(`/app/equipment${queryFor(scope)}&saved=1`);
 }
 
-export async function updateEquipmentStatusAction(form: FormData): Promise<void> {
+export async function archiveEquipmentAction(form: FormData): Promise<void> {
   const actor = await requireOperationalActor();
   const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
   await assertOperationalPermission(scope, "equipment.manage");
   const equipmentId = formString(form, "equipmentId");
-  const status = formString(form, "status");
   const note = formString(form, "note");
-  if (!idSchema.safeParse(equipmentId).success || !["active", "inactive", "maintenance", "archived"].includes(status) || note.length > 500) fail("/app/equipment", "invalid");
+  if (!idSchema.safeParse(equipmentId).success || note.length > 500) fail("/app/equipment", "invalid");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -518,20 +604,28 @@ export async function updateEquipmentStatusAction(form: FormData): Promise<void>
       `SELECT status FROM equipment WHERE id = $1 AND organization_id = $2 AND branch_id = $3 FOR UPDATE`,
       [equipmentId, scope.organizationId, scope.branchId],
     );
-    if (!current.rowCount) throw new Error("not found");
+    if (!current.rowCount || current.rows[0]!.status === "archived") throw new Error("equipment not archivable");
     const previousStatus = current.rows[0]!.status;
+    const dependencies = await client.query<{ inspections: number; defects: number; work_orders: number; schedules: number }>(
+      `SELECT
+         (SELECT count(*)::int FROM inspections WHERE organization_id = $1 AND branch_id = $2 AND equipment_id = $3) AS inspections,
+         (SELECT count(*)::int FROM defects WHERE organization_id = $1 AND branch_id = $2 AND equipment_id = $3) AS defects,
+         (SELECT count(*)::int FROM work_orders WHERE organization_id = $1 AND branch_id = $2 AND equipment_id = $3) AS work_orders,
+         (SELECT count(*)::int FROM inspection_schedules WHERE organization_id = $1 AND branch_id = $2 AND equipment_id = $3) AS schedules`,
+      [scope.organizationId, scope.branchId, equipmentId],
+    );
     const previous = await client.query(
-      `UPDATE equipment SET status = $1, updated_at = now()
-        WHERE id = $2 AND organization_id = $3 AND branch_id = $4`,
-      [status, equipmentId, scope.organizationId, scope.branchId],
+      `UPDATE equipment SET status = 'archived', updated_at = now()
+        WHERE id = $1 AND organization_id = $2 AND branch_id = $3`,
+      [equipmentId, scope.organizationId, scope.branchId],
     );
     if (!previous.rowCount) throw new Error("not found");
     await client.query(
       `INSERT INTO equipment_status_events (id, organization_id, branch_id, equipment_id, previous_status, new_status, note, actor_user_id)
        VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8)`,
-      [randomUUID(), scope.organizationId, scope.branchId, equipmentId, previousStatus, status, note, actor.id],
+      [randomUUID(), scope.organizationId, scope.branchId, equipmentId, previousStatus, "archived", note || "بایگانی نرم با حفظ سوابق و وابستگی‌ها", actor.id],
     );
-    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment.status_changed", entityType: "equipment", entityId: equipmentId, metadata: { status } });
+    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment.archived", entityType: "equipment", entityId: equipmentId, metadata: { dependencies: dependencies.rows[0], note: note || null } });
     await client.query("COMMIT");
   } catch {
     await client.query("ROLLBACK");
@@ -540,6 +634,35 @@ export async function updateEquipmentStatusAction(form: FormData): Promise<void>
     client.release();
   }
   revalidatePath("/app/equipment");
+  revalidatePath("/app");
+  redirect(`/app/equipment${queryFor(scope)}&saved=archived`);
+}
+
+export async function restoreEquipmentAction(form: FormData): Promise<void> {
+  const actor = await requireOperationalActor();
+  const scope = await requireOperationalScope(actor, formString(form, "organizationId"), formString(form, "branchId"));
+  await assertOperationalPermission(scope, "equipment.manage");
+  const equipmentId = formString(form, "equipmentId");
+  if (!idSchema.safeParse(equipmentId).success) fail("/app/equipment", "invalid");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query<{ status: string }>(
+      "SELECT status FROM equipment WHERE id = $1 AND organization_id = $2 AND branch_id = $3 FOR UPDATE",
+      [equipmentId, scope.organizationId, scope.branchId],
+    );
+    if (!current.rowCount || current.rows[0]!.status !== "archived") throw new Error("equipment is not archived");
+    await client.query("UPDATE equipment SET status = 'active', updated_at = now() WHERE id = $1 AND organization_id = $2 AND branch_id = $3", [equipmentId, scope.organizationId, scope.branchId]);
+    await client.query(
+      `INSERT INTO equipment_status_events (id, organization_id, branch_id, equipment_id, previous_status, new_status, note, actor_user_id)
+       VALUES ($1, $2, $3, $4, 'archived', 'active', 'پروندهٔ تجهیز بازیابی شد', $5)`,
+      [randomUUID(), scope.organizationId, scope.branchId, equipmentId, actor.id],
+    );
+    await insertOperationalAudit(client, { actorId: actor.id, organizationId: scope.organizationId, branchId: scope.branchId, action: "equipment.restored", entityType: "equipment", entityId: equipmentId });
+    await client.query("COMMIT");
+  } catch { await client.query("ROLLBACK"); fail("/app/equipment", "could-not-save"); } finally { client.release(); }
+  revalidatePath("/app/equipment");
+  revalidatePath("/app");
   redirect(`/app/equipment${queryFor(scope)}&saved=1`);
 }
 

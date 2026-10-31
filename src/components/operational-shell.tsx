@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { OperationalScope } from "@/server/auth-guards";
+import { hasOrganizationPermission, type OperationalScope } from "@/server/auth-guards";
 import { SignOutButton } from "@/components/sign-out-button";
 import { OfflineStatus } from "@/components/offline-status";
 import { BrandLogo } from "@/components/brand-logo";
@@ -10,6 +10,7 @@ import { PLATFORM_ADMIN_PERMISSION_QUERY } from "@/server/platform-permission-qu
 const links = [
   ["خانه", "/app", "dashboard.read"],
   ["تجهیزات", "/app/equipment", "equipment.read"],
+  ["دسته‌بندی تجهیزات", "/app/equipment/categories", "equipment.manage", "organization"],
   ["چک‌لیست‌ها", "/app/checklists", "checklist.read"],
   ["برنامهٔ بازرسی", "/app/schedules", "inspection_schedule.manage"],
   ["بازرسی‌ها", "/app/inspections", "inspection.read"],
@@ -21,7 +22,7 @@ const links = [
   ["گزارش‌ها", "/app/reports", "report.export"],
 ] as const;
 
-export async function OperationalShell({ scope, children, title }: { scope: OperationalScope; children: ReactNode; title: string }) {
+export async function OperationalShell({ scope, children, title, description, headerActions }: { scope: OperationalScope; children: ReactNode; title: string; description?: string; headerActions?: ReactNode }) {
   const params = `organizationId=${encodeURIComponent(scope.organizationId)}&branchId=${encodeURIComponent(scope.branchId)}`;
   const granted = await pool.query<{ permission_key: string }>(
     `SELECT DISTINCT rp.permission_key
@@ -34,18 +35,23 @@ export async function OperationalShell({ scope, children, title }: { scope: Oper
     [scope.membershipId, scope.organizationId, scope.branchId],
   );
   const permissionKeys = new Set(granted.rows.map((row) => row.permission_key));
+  const canManageCategories = permissionKeys.has("equipment.manage") && await hasOrganizationPermission(scope, "equipment.manage");
   return (
     <div className="workspace">
       <aside className="sidebar">
         <Link href={`/app?${params}`} className="brand-lockup"><BrandLogo appearance="teal" /><span>تفریح‌بان<small>پروندهٔ عملیات</small></span></Link>
         <div className="scope-card"><span className="eyebrow">محدودهٔ فعال</span><strong>{scope.organizationName}</strong><span>{scope.branchName}</span><Link href="/app/select-scope">تغییر مجموعه یا شعبه</Link></div>
         <nav className="side-nav" aria-label="ناوبری اصلی">
-          {links.filter(([, , permission]) => permissionKeys.has(permission)).map(([label, href]) => <Link key={href} href={`${href}?${params}`}>{label}</Link>)}
+          {links.filter(([, , permission, organizationOnly]) => permissionKeys.has(permission) && (organizationOnly !== "organization" || canManageCategories)).map(([label, href]) => <Link key={href} href={`${href}?${params}`}>{label}</Link>)}
         </nav>
         <div className="sidebar-bottom"><OfflineStatus /><SignOutButton accountId={scope.actor.id} platform={false} /></div>
       </aside>
       <main className="workspace-main">
-        <header className="page-top"><div><span className="eyebrow">{scope.branchName}</span><h1>{title}</h1></div><span className="avatar">{scope.actor.name.slice(0, 1)}</span></header>
+        <header className={`page-top workspace-page-top${headerActions ? " page-top-with-actions" : ""}`}>
+          <div className="page-top-copy"><span className="eyebrow">{scope.branchName}</span><h1>{title}</h1>{description && <p>{description}</p>}</div>
+          {headerActions && <div className="page-top-actions">{headerActions}</div>}
+          <span className="avatar">{scope.actor.name.slice(0, 1)}</span>
+        </header>
         {children}
         <footer className="safety-note">تفریح‌بان ابزار ثبت و پیگیری است؛ تصمیم بهره‌برداری با متخصص انسانی مجموعه است.</footer>
       </main>

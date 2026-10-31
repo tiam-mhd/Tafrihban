@@ -18,11 +18,11 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Se
   const [schedules, equipment, versions, members] = await Promise.all([
     pool.query<{ id: string; equipment_id: string; checklist_version_id: string; equipment_name: string; asset_code: string; checklist_name: string; version: number; due_at: Date; frequency: string; assignee: string | null }>(
       `SELECT s.id, s.equipment_id, s.checklist_version_id, e.name AS equipment_name, e.asset_code, t.name AS checklist_name, v.version, s.next_due_at AS due_at, s.frequency, u.name AS assignee
-         FROM inspection_schedules s JOIN equipment e ON e.id = s.equipment_id AND e.organization_id = s.organization_id
+         FROM inspection_schedules s JOIN equipment e ON e.id = s.equipment_id AND e.organization_id = s.organization_id AND e.branch_id = s.branch_id
          JOIN checklist_template_versions v ON v.id = s.checklist_version_id AND v.organization_id = s.organization_id
          JOIN checklist_templates t ON t.id = v.template_id AND t.organization_id = v.organization_id
          LEFT JOIN users u ON u.id = s.assigned_user_id
-        WHERE s.organization_id = $1 AND s.branch_id = $2 AND s.is_active ORDER BY s.next_due_at`, [scope.organizationId, scope.branchId]),
+        WHERE s.organization_id = $1 AND s.branch_id = $2 AND s.is_active AND e.status <> 'archived' ORDER BY s.next_due_at`, [scope.organizationId, scope.branchId]),
     pool.query<{ id: string; name: string; asset_code: string }>("SELECT id, name, asset_code FROM equipment WHERE organization_id = $1 AND branch_id = $2 AND status <> 'archived' ORDER BY asset_code", [scope.organizationId, scope.branchId]),
     pool.query<{ id: string; title: string; version: number }>(
       `SELECT v.id, t.name AS title, v.version FROM checklist_template_versions v JOIN checklist_templates t ON t.id = v.template_id AND t.organization_id = v.organization_id WHERE v.organization_id = $1 AND v.status = 'published' ORDER BY t.name, v.version DESC`, [scope.organizationId]),
